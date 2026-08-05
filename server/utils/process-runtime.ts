@@ -1,13 +1,13 @@
+import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@nuxthub/db";
 import type { ActorRef, NextAction, RuntimeFact, WorkOrder } from "#shared/types/process";
+import { canonicalJson } from "#shared/canonical";
+import { effectKeyInput } from "#shared/effect-key";
 import { executeNextAction } from "./eve-control-plane";
 
 function effectKey(fact: RuntimeFact) {
-  const coordinates = [fact.sessionId, fact.eventType, fact.turnId, fact.stepIndex, fact.sequence, fact.callId]
-    .filter(value => value !== undefined)
-    .join(":");
-  return coordinates || `${fact.sessionId}:${fact.eventId}`;
+  return createHash("sha256").update(canonicalJson(effectKeyInput(fact)), "utf8").digest("hex");
 }
 
 export async function ingestRuntimeFact(fact: RuntimeFact) {
