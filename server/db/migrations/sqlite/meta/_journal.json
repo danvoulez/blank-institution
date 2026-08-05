@@ -15,6 +15,13 @@
       "when": 1785951291304,
       "tag": "0001_institution",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785963600000,
+      "tag": "0002_artifact_digest",
+      "breakpoints": true
     }
   ]
 }
