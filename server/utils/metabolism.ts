@@ -7,6 +7,7 @@ import { getProcessDetailForUser } from "./processes";
 import { failIntake, prepareIntakeRetry } from "./process-intake";
 import { notifyHumanAssignment, notifyIntakeFailure } from "./process-notifications";
 import { openRecoveryCheckpoint } from "./process-recovery";
+import { nextProcessStatus } from "./process-status";
 
 const TERMINAL = ["completed", "cancelled", "failed"] as const;
 
@@ -151,11 +152,11 @@ async function retryAssignment(assignmentId: string) {
     });
     const actor = assignment.assignee as ActorRef;
     await tx.update(schema.processes).set({
-      status: actor.kind === "human"
+      status: nextProcessStatus(process.status, actor.kind === "human"
         ? "waiting_human"
         : assignment.purpose === "checkpoint_review"
           ? "checkpoint"
-          : "assigning",
+          : "assigning"),
       updatedAt: new Date(),
     }).where(eq(schema.processes.id, process.id));
   });

@@ -14,6 +14,7 @@ import type {
 } from "#shared/types/process";
 import { assignmentRow, artifactRow, checkpointRow, intakeRow, processRow } from "./process-codec";
 import { resolveDeadline } from "./process-deadlines";
+import { nextProcessStatus } from "./process-status";
 import { getProcessType, validateDeadlineClass, validateResponsible, validateTypeOwner } from "./process-types";
 
 const ACTIVE_ASSIGNMENT_STATUSES = ["attempting", "accepted", "running"] as const;
@@ -306,6 +307,16 @@ export async function acceptAssignment(input: {
     throw createError({ statusCode: 403, statusMessage: "Assignment belongs to another responsible" });
   }
 
+  // Resolved before the claim, not after: a stale assignment on a closed
+  // process must be refused outright rather than accepted and then rejected,
+  // which would leave the assignment claimed against a process it cannot move.
+  const claimedStatus = nextProcessStatus(
+    process.status,
+    assignment.purpose === "work"
+      ? "running"
+      : input.actor.kind === "human" ? "waiting_human" : "checkpoint",
+  );
+
   const now = new Date();
   const lease = new Date(now.getTime() + (input.leaseMinutes ?? leaseMinutes()) * 60_000);
   const result = await db.update(schema.processAssignments).set({
@@ -323,14 +334,10 @@ export async function acceptAssignment(input: {
       throw createError({ statusCode: 409, statusMessage: "Assignment was already claimed or is no longer active" });
     }
   }
-  if (assignment.purpose === "work") {
-    await db.update(schema.processes).set({ status: "running", updatedAt: new Date() }).where(eq(schema.processes.id, process.id));
-  } else {
-    await db.update(schema.processes).set({
-      status: input.actor.kind === "human" ? "waiting_human" : "checkpoint",
-      updatedAt: new Date(),
-    }).where(eq(schema.processes.id, process.id));
-  }
+  await db.update(schema.processes).set({
+    status: claimedStatus,
+    updatedAt: new Date(),
+  }).where(eq(schema.processes.id, process.id));
   return { assignmentId: input.assignmentId, purpose: assignment.purpose, leaseExpiresAt: lease.getTime() };
 }
 
@@ -407,7 +414,7 @@ export async function applyOpeningCheckpointDecision(input: {
         leaseExpiresAt: null,
       }).where(eq(schema.processAssignments.id, reviewAssignment.id));
       await tx.update(schema.processes).set({
-        status: terminalStatus,
+        status: nextProcessStatus(process.status, terminalStatus),
         revision: process.revision + 1,
         completedAt: new Date(),
         updatedAt: new Date(),
@@ -468,7 +475,7 @@ export async function applyOpeningCheckpointDecision(input: {
       objective,
       deadlineClass: deadline.class,
       dueAt: new Date(deadline.dueAt),
-      status: responsible.kind === "human" ? "waiting_human" : "assigning",
+      status: nextProcessStatus(process.status, responsible.kind === "human" ? "waiting_human" : "assigning"),
       revision: process.revision + 1,
       updatedAt: new Date(),
     }).where(and(eq(schema.processes.id, process.id), eq(schema.processes.revision, process.revision)));
@@ -588,7 +595,7 @@ export async function applyRecoveryDecision(input: {
 
     if (terminalStatus) {
       await tx.update(schema.processes).set({
-        status: terminalStatus,
+        status: nextProcessStatus(process.status, terminalStatus),
         revision: process.revision + 1,
         completedAt: new Date(),
         updatedAt: new Date(),
@@ -615,7 +622,7 @@ export async function applyRecoveryDecision(input: {
         ? "checkpoint"
         : "assigning";
     await tx.update(schema.processes).set({
-      status: nextStatus,
+      status: nextProcessStatus(process.status, nextStatus),
       ...(failedAssignment.purpose === "work" ? { currentResponsible: nextAssignee } : {}),
       revision: process.revision + 1,
       updatedAt: new Date(),
@@ -738,7 +745,7 @@ export async function submitWork(
       acceptDeadlineAt: new Date(Date.now() + acceptMinutes() * 60_000),
     });
     await tx.update(schema.processes).set({
-      status: owner.kind === "human" ? "waiting_human" : "checkpoint",
+      status: nextProcessStatus(process.status, owner.kind === "human" ? "waiting_human" : "checkpoint"),
       revision: process.revision + 1,
       updatedAt: new Date(),
     }).where(and(
@@ -875,7 +882,7 @@ export async function applyReviewDecision(input: {
 
     if (terminalStatus) {
       await tx.update(schema.processes).set({
-        status: terminalStatus,
+        status: nextProcessStatus(process.status, terminalStatus),
         currentCheckpointSeq: sequence,
         revision: process.revision + 1,
         completedAt: new Date(),
@@ -902,7 +909,7 @@ export async function applyReviewDecision(input: {
       acceptDeadlineAt: new Date(Date.now() + acceptMinutes() * 60_000),
     });
     await tx.update(schema.processes).set({
-      status: nextStatus,
+      status: nextProcessStatus(process.status, nextStatus),
       currentResponsible: nextResponsible,
       currentCheckpointSeq: sequence,
       revision: process.revision + 1,

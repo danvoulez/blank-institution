@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { processes } from "./processes";
 import { processCheckpoints } from "./process-checkpoints";
@@ -27,4 +27,11 @@ export const processAssignments = sqliteTable("process_assignments", {
   index("process_assignments_checkpoint_idx").on(table.checkpointId, table.issuedAt),
   index("process_assignments_process_status_idx").on(table.processId, table.status),
   index("process_assignments_child_session_idx").on(table.childSessionId),
+  // A process holds exactly one live assignment at a time: every handler that
+  // issues one closes the previous one in the same transaction. Stated as a
+  // constraint, two concurrent reissues of the same expired assignment can no
+  // longer both succeed and leave a second claimable assignment behind.
+  uniqueIndex("process_assignments_active_uq")
+    .on(table.processId)
+    .where(sql`${table.status} in ('attempting', 'accepted', 'running')`),
 ]);

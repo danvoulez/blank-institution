@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ASSIGNMENT_TRANSITIONS, PROCESS_TRANSITIONS, canAssignmentTransition, canProcessTransition } from "../../shared/process-machine.ts";
+import type { ProcessStatus } from "../../shared/types/process.ts";
+import { ASSIGNMENT_TRANSITIONS, PROCESS_STATUSES_NON_TERMINAL, PROCESS_TRANSITIONS, canAssignmentTransition, canProcessTransition } from "../../shared/process-machine.ts";
 import { PROCESS_TYPE_MANIFESTS } from "../../shared/generated/process-types.ts";
 
 test("terminal process states have no outgoing transitions", () => {
@@ -15,6 +16,52 @@ test("universal process cycle supports work, review, correction and closure", ()
   assert.equal(canProcessTransition("checkpoint", "assigning"), true);
   assert.equal(canProcessTransition("checkpoint", "completed"), true);
   assert.equal(canProcessTransition("completed", "running"), false);
+});
+
+test("nothing leaves a terminal state, whatever the target", () => {
+  for (const terminal of ["completed", "cancelled", "failed"] as const) {
+    for (const target of PROCESS_STATUSES_NON_TERMINAL) {
+      assert.equal(canProcessTransition(terminal, target), false, `${terminal} -> ${target}`);
+    }
+    // A stale claim on a closed process is the concrete case: acceptAssignment
+    // used to write "running" without consulting the machine at all.
+    assert.equal(canProcessTransition(terminal, "running"), false);
+  }
+});
+
+test("completion is reachable only while the owner holds a review", () => {
+  const completers = PROCESS_STATUSES_NON_TERMINAL.filter(status => canProcessTransition(status, "completed"));
+  assert.deepEqual([...completers].sort(), ["checkpoint", "waiting_human"]);
+});
+
+test("every transition a handler performs is permitted", () => {
+  // Enumerated from the status writes in processes.ts, metabolism.ts and
+  // process-recovery.ts. A handler that starts making a move absent from this
+  // list will be rejected at runtime, so the move belongs here first.
+  const performed: Array<[ProcessStatus, ProcessStatus]> = [
+    // acceptAssignment: claiming work, then claiming a checkpoint review
+    ["assigning", "running"], ["waiting_human", "running"], ["blocked", "running"],
+    ["checkpoint", "checkpoint"], ["waiting_human", "waiting_human"], ["blocked", "checkpoint"],
+    // openProcessFromSupervisor -> applyOpeningCheckpointDecision
+    ["waiting_human", "assigning"], ["waiting_human", "cancelled"], ["waiting_human", "failed"],
+    // submitWork
+    ["running", "checkpoint"], ["running", "waiting_human"],
+    // applyReviewDecision
+    ["checkpoint", "completed"], ["waiting_human", "completed"],
+    ["checkpoint", "assigning"], ["checkpoint", "waiting_human"],
+    ["checkpoint", "cancelled"], ["checkpoint", "failed"],
+    // applyRecoveryDecision, always from blocked
+    ["blocked", "assigning"], ["blocked", "waiting_human"], ["blocked", "cancelled"], ["blocked", "failed"],
+    // retryAssignment reissuing an expired claim
+    ["running", "assigning"], ["assigning", "waiting_human"], ["assigning", "checkpoint"],
+    // openRecoveryCheckpoint
+    ["open", "blocked"], ["assigning", "blocked"], ["running", "blocked"],
+    ["checkpoint", "blocked"], ["waiting_human", "blocked"],
+  ];
+
+  for (const [from, to] of performed) {
+    assert.equal(canProcessTransition(from, to), true, `${from} -> ${to}`);
+  }
 });
 
 test("assignment lifecycle prevents submitted work from being reclaimed", () => {

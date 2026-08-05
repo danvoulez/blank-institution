@@ -22,6 +22,13 @@
       "when": 1785963600000,
       "tag": "0002_artifact_digest",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785963660000,
+      "tag": "0003_single_active_assignment",
+      "breakpoints": true
     }
   ]
 }
