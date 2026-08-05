@@ -92,8 +92,9 @@ test("a stage's review policy is narrower than the union across stages", () => {
   if (!triage) throw new Error("triage-review manifest is missing");
 
   for (const stage of triage.stages) {
-    assert.equal(stage.review.allowedDecisions.includes("accept"), false);
-    assert.equal(stage.review.allowedDecisions.includes("return"), false);
+    const allowed: readonly string[] = stage.review.allowedDecisions;
+    assert.equal(allowed.includes("accept"), false);
+    assert.equal(allowed.includes("return"), false);
   }
   assert.equal(union.has("accept"), true);
   assert.equal(union.has("return"), true);

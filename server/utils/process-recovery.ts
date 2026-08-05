@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@nuxthub/db";
 import type { ActorRef, NextAction, WorkOrder } from "#shared/types/process";
+import { acceptDeadlineAt } from "./process-deadlines";
 import { nextProcessStatus } from "./process-status";
 
 const TERMINAL = ["completed", "cancelled", "failed"] as const;
@@ -89,7 +90,7 @@ export async function openRecoveryCheckpoint(input: {
       assignee: owner,
       status: "attempting",
       attempt: 1,
-      acceptDeadlineAt: new Date(Date.now() + Number(process.env.ASSIGNMENT_ACCEPT_MINUTES ?? 10) * 60_000),
+      acceptDeadlineAt: acceptDeadlineAt(),
     });
     await tx.update(schema.processes).set({
       status: nextProcessStatus(process.status, "blocked"),

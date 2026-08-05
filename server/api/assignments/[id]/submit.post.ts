@@ -6,7 +6,10 @@ import { executeNextAction } from "~~/server/utils/eve-control-plane";
 export default defineEventHandler(async (event) => {
   const { id } = await getValidatedRouterParams(event, assignmentIdParamsSchema.parse);
   const userId = await requireSessionUserId(event);
-  const body = await readValidatedBody(event, value => workSubmissionSchema.parse({ ...value, assignmentId: id }));
+  const body = await readValidatedBody(event, (value: unknown) => workSubmissionSchema.parse({
+    ...(value as Record<string, unknown>),
+    assignmentId: id,
+  }));
   const result = await submitWork(userId, body);
   await executeNextAction(result.nextAction);
   return result;

@@ -1,8 +1,37 @@
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+
 const privateNoStore = { "cache-control": "private, no-store" } as const;
 const noStore = { "cache-control": "no-store" } as const;
 
+// Eve's own modules import each other through its package `imports` field
+// (`#*.js` -> `./dist/src/*.js`). Nuxt 4 aliases the bare specifier `#shared`
+// to this project's shared/ directory, and that alias wins inside the Nitro
+// bundle, so `#shared/tool-schema.js` resolved to `<root>/shared//tool-schema.js`
+// and the server build failed to load it.
+//
+// Eve's internal specifiers always carry the .js extension and ours never do,
+// which is enough to tell them apart and send only Eve's back to Eve.
+const eveDist = resolve(dirname(createRequire(import.meta.url).resolve("eve/package.json")), "dist/src");
+
+const resolveEveInternalImports = {
+  name: "eve-internal-subpath-imports",
+  resolveId(id: string) {
+    const match = /^#(.+)\.js$/.exec(id);
+    return match ? resolve(eveDist, `${match[1]}.js`) : null;
+  },
+};
+
 export default defineNuxtConfig({
   modules: ["@nuxt/ui", "@comark/nuxt", "eve/nuxt", "@nuxthub/core", "@vercel/analytics"],
+  typescript: {
+    // The domain tests run under `node --experimental-strip-types`, which
+    // requires relative imports to carry the .ts extension. Nuxt emits a
+    // separate tsconfig per layer, so the option has to be set on each one
+    // that covers a test file.
+    tsConfig: { compilerOptions: { allowImportingTsExtensions: true } },
+    sharedTsConfig: { compilerOptions: { allowImportingTsExtensions: true } },
+  },
   eve: {
     eveBuildCommand: "pnpm process:generate && eve build",
   },
@@ -39,6 +68,8 @@ export default defineNuxtConfig({
     "/api/integrations/**": { headers: privateNoStore },
   },
   nitro: {
+    typescript: { tsConfig: { compilerOptions: { allowImportingTsExtensions: true } } },
+    rollupConfig: { plugins: [resolveEveInternalImports] },
     compressPublicAssets: true,
     prerender: {
       routes: ["/login"],

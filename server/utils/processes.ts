@@ -14,16 +14,11 @@ import type {
   WorkSubmission,
 } from "#shared/types/process";
 import { assignmentRow, artifactRow, checkpointRow, intakeRow, processRow } from "./process-codec";
-import { resolveDeadline } from "./process-deadlines";
+import { acceptDeadlineAt, resolveDeadline } from "./process-deadlines";
 import { nextProcessStatus } from "./process-status";
 import { getProcessType, validateDeadlineClass, validateResponsible, validateTypeOwner } from "./process-types";
 
 const ACTIVE_ASSIGNMENT_STATUSES = ["attempting", "accepted", "running"] as const;
-
-function acceptMinutes() {
-  const value = Number(process.env.ASSIGNMENT_ACCEPT_MINUTES ?? 10);
-  return Number.isFinite(value) && value > 0 ? value : 10;
-}
 
 function leaseMinutes() {
   const value = Number(process.env.ASSIGNMENT_LEASE_MINUTES ?? 30);
@@ -283,7 +278,7 @@ export async function openProcessFromSupervisor(
       assignee: humanOpeningReview ? typeOwner : currentResponsible,
       status: "attempting",
       attempt: 1,
-      acceptDeadlineAt: new Date(now + acceptMinutes() * 60_000),
+      acceptDeadlineAt: acceptDeadlineAt(now),
     });
     await tx.update(schema.processIntakes).set({
       status: "converted",
@@ -498,7 +493,7 @@ export async function applyOpeningCheckpointDecision(input: {
       assignee: responsible,
       status: "attempting",
       attempt: 1,
-      acceptDeadlineAt: new Date(Date.now() + acceptMinutes() * 60_000),
+      acceptDeadlineAt: acceptDeadlineAt(),
     });
     await tx.update(schema.processes).set({
       typeOwner,
@@ -644,7 +639,7 @@ export async function applyRecoveryDecision(input: {
       status: "attempting",
       attempt: failedAssignment.attempt + 1,
       feedback: input.decision.feedback,
-      acceptDeadlineAt: new Date(Date.now() + acceptMinutes() * 60_000),
+      acceptDeadlineAt: acceptDeadlineAt(),
     });
     const isHuman = nextAssignee!.kind === "human";
     const nextStatus = isHuman
@@ -773,7 +768,7 @@ export async function submitWork(
       assignee: owner,
       status: "attempting",
       attempt: 1,
-      acceptDeadlineAt: new Date(Date.now() + acceptMinutes() * 60_000),
+      acceptDeadlineAt: acceptDeadlineAt(),
     });
     await tx.update(schema.processes).set({
       status: nextProcessStatus(process.status, owner.kind === "human" ? "waiting_human" : "checkpoint"),
@@ -943,7 +938,7 @@ export async function applyReviewDecision(input: {
       status: "attempting",
       attempt: assignment.attempt + 1,
       feedback: input.decision.requestedCorrections.join("\n"),
-      acceptDeadlineAt: new Date(Date.now() + acceptMinutes() * 60_000),
+      acceptDeadlineAt: acceptDeadlineAt(),
     });
     await tx.update(schema.processes).set({
       status: nextProcessStatus(process.status, nextStatus),

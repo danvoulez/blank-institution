@@ -61,9 +61,9 @@ export async function launchRoleSession(input: {
         institution: {
           role: input.role,
           userId: input.userId,
-          intakeId: input.intakeId,
-          processId: input.processId,
-          assignmentId: input.assignmentId,
+          ...(input.intakeId ? { intakeId: input.intakeId } : {}),
+          ...(input.processId ? { processId: input.processId } : {}),
+          ...(input.assignmentId ? { assignmentId: input.assignmentId } : {}),
         },
       },
     });

@@ -3,7 +3,7 @@ import { db, schema } from "@nuxthub/db";
 import type { ActorRef, DeadlineClass, MetabolismAction } from "#shared/types/process";
 import { createInstitutionEveClient, executeNextAction, launchTranslatorForIntake } from "./eve-control-plane";
 import { assignmentRow, intakeRow, processRow } from "./process-codec";
-import { deadlineWarningAt } from "./process-deadlines";
+import { acceptDeadlineAt, deadlineWarningAt } from "./process-deadlines";
 import { getProcessDetailForUser } from "./processes";
 import { failIntake, prepareIntakeRetry } from "./process-intake";
 import { notifyHumanAssignment, notifyIntakeFailure } from "./process-notifications";
@@ -151,7 +151,7 @@ async function retryAssignment(assignmentId: string) {
       status: "attempting",
       attempt: assignment.attempt + 1,
       feedback: assignment.feedback,
-      acceptDeadlineAt: new Date(Date.now() + Number(process.env.ASSIGNMENT_ACCEPT_MINUTES ?? 10) * 60_000),
+      acceptDeadlineAt: acceptDeadlineAt(),
     });
     const actor = assignment.assignee as ActorRef;
     await tx.update(schema.processes).set({

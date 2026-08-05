@@ -38,3 +38,11 @@ export function deadlineWarningAt(deadline: ProcessDeadline, createdAt: number):
   const ratio = deadline.class === "urgent" ? 0.5 : deadline.class === "24h" ? 0.75 : 0.8;
   return createdAt + Math.max(0, deadline.dueAt - createdAt) * ratio;
 }
+
+// Read at module scope on purpose. Both call sites that inlined this had a
+// local named `process` holding a database row, so `process.env` resolved to
+// that row and threw before the assignment was ever reissued.
+export function acceptDeadlineAt(now = Date.now()): Date {
+  const minutes = Number(process.env.ASSIGNMENT_ACCEPT_MINUTES ?? 10);
+  return new Date(now + (Number.isFinite(minutes) && minutes > 0 ? minutes : 10) * 60_000);
+}

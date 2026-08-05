@@ -26,6 +26,10 @@ const { data: failedData, pending: failedPending, refresh: refreshFailed } = awa
 const retryingIntake = ref<string>();
 const failedIntakes = computed(() => failedData.value?.intakes ?? []);
 
+async function refreshAll() {
+  await Promise.all([refresh(), refreshFailed()]);
+}
+
 async function retryIntake(id: string) {
   retryingIntake.value = id;
   try {
@@ -44,7 +48,7 @@ const activeCount = computed(() => processes.value.filter(item => !["completed",
   <UDashboardPanel id="processes" class="min-h-0" :ui="{ body: 'p-0 sm:p-0' }">
     <template #header>
       <Navbar>
-        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" @click="Promise.all([refresh(), refreshFailed()])" />
+        <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" @click="refreshAll" />
       </Navbar>
     </template>
 
