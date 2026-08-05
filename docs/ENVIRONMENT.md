@@ -63,6 +63,7 @@ When a role has no base URL, Eve selects its serializable Gateway model at `sess
 |---|---|---|
 | `METABOLISM_SCHEDULE` | `*/5 * * * *` | Eve schedule cadence, in UTC on Vercel. |
 | `SLA_URGENT_HOURS` | empty | Institution-wide urgent duration. Without it, opening must provide an explicit `dueAt`. |
+| `INTERNAL_ORIGIN` | `http://127.0.0.1:$PORT` | Where the institution reaches itself. Keep it on loopback: `BETTER_AUTH_URL` is the public name and must not be reused here. |
 | `INTAKE_ANALYSIS_MAX_ATTEMPTS` | `3` | Automatic Translator analysis attempts before explicit failure and human escalation. |
 | `ASSIGNMENT_MAX_ATTEMPTS` | `3` | Automatic assignment reissues before the type owner gets a recovery checkpoint. |
 | `ASSIGNMENT_ACCEPT_MINUTES` | `10` | Time allowed to claim a newly issued assignment. |

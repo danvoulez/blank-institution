@@ -1,5 +1,5 @@
 import type { ProcessRole, RoleModelSettings } from "../../shared/types/process.js";
-import { appOrigin, internalHeaders } from "./internal-api.js";
+import { internalHeaders, internalOrigin } from "./internal-api.js";
 
 const DEFAULTS: Record<ProcessRole, string> = {
   translator: "anthropic/claude-sonnet-4.6",
@@ -26,7 +26,7 @@ function environmentModel(role: ProcessRole): RoleModelSettings {
 
 export async function resolveRoleModel(role: ProcessRole): Promise<RoleModelSettings> {
   try {
-    const response = await fetch(`${appOrigin()}/api/internal/runtime/models/${role}`, { headers: internalHeaders() });
+    const response = await fetch(`${internalOrigin()}/api/internal/runtime/models/${role}`, { headers: internalHeaders() });
     if (!response.ok) return environmentModel(role);
     return ((await response.json()) as { model: RoleModelSettings }).model;
   } catch {

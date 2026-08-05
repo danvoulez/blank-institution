@@ -1,4 +1,4 @@
-import { appOrigin, internalHeaders } from "./internal-api.js";
+import { internalHeaders, internalOrigin } from "./internal-api.js";
 import type {
   MetabolismAction,
   ProcessDetail,
@@ -11,7 +11,7 @@ import type {
 } from "../../shared/types/process.js";
 
 async function internalFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${appOrigin()}${path}`, {
+  const response = await fetch(`${internalOrigin()}${path}`, {
     ...init,
     headers: { ...internalHeaders(), ...(init.headers ?? {}) },
   });
@@ -143,7 +143,7 @@ export async function submitWorkRemote(userId: string, submission: WorkSubmissio
 }
 
 export async function listProcessesRemote(userId: string): Promise<ProcessSummary[]> {
-  const response = await fetch(`${appOrigin()}/api/internal/processes?userId=${encodeURIComponent(userId)}`, {
+  const response = await fetch(`${internalOrigin()}/api/internal/processes?userId=${encodeURIComponent(userId)}`, {
     headers: internalHeaders(),
   });
   if (!response.ok) return [];

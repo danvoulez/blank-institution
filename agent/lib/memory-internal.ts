@@ -1,6 +1,6 @@
 import type { MemoryByCategory } from "../../shared/types/memory.js";
 import type { UserProfile } from "../../shared/types/profile.js";
-import { appOrigin, internalHeaders } from "./internal-api.js";
+import { internalHeaders, internalOrigin } from "./internal-api.js";
 
 export interface UserContextPayload {
   profile: UserProfile;
@@ -9,7 +9,7 @@ export interface UserContextPayload {
 
 export async function fetchUserContext(userId: string): Promise<UserContextPayload | undefined> {
   const response = await fetch(
-    `${appOrigin()}/api/internal/memory?userId=${encodeURIComponent(userId)}`,
+    `${internalOrigin()}/api/internal/memory?userId=${encodeURIComponent(userId)}`,
     { headers: internalHeaders() },
   );
 
@@ -25,7 +25,7 @@ export async function saveMemoryRemote(input: {
   category: string;
   content: string;
 }) {
-  const response = await fetch(`${appOrigin()}/api/internal/memory`, {
+  const response = await fetch(`${internalOrigin()}/api/internal/memory`, {
     method: "POST",
     headers: internalHeaders(),
     body: JSON.stringify({

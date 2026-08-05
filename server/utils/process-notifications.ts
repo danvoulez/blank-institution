@@ -1,5 +1,6 @@
 import { callSlackApi } from "eve/channels/slack";
 import { createSendblueAdapter } from "chat-adapter-sendblue";
+import { resolvePublicOrigin } from "#shared/origin";
 import { getPhoneLinkForAppUser } from "./phone-links";
 import { getSlackLinkForAppUser } from "./slack-links";
 
@@ -9,8 +10,11 @@ export interface HumanNotificationAttempt {
   detail?: string;
 }
 
+// Deliberately the public origin: these URLs are opened by a person, from a
+// Slack message or an iMessage, often from outside the house. A loopback
+// address here would hand out links that only work on the server itself.
 function appOrigin() {
-  return (process.env.BETTER_AUTH_URL || process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/u, "");
+  return resolvePublicOrigin(process.env);
 }
 
 export async function notifyHumanAssignment(input: {

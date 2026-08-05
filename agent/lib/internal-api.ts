@@ -1,15 +1,13 @@
-export function appOrigin() {
-  const configured = process.env.BETTER_AUTH_URL?.trim().replace(/\/$/, "");
-  if (configured) {
-    return configured;
-  }
+import { resolveInternalOrigin } from "../../shared/origin.js";
 
-  const vercelUrl = process.env.VERCEL_URL?.trim();
-  if (vercelUrl) {
-    return `https://${vercelUrl}`;
-  }
-
-  return "http://localhost:3000";
+// The Eve runtime and the Nitro API run in the same process, so every call
+// through here stays on loopback. It used to read BETTER_AUTH_URL, which
+// behind a tunnel sent each one out to the edge and back — once per model
+// step, once per runtime event.
+//
+// Links meant for a person resolve through resolvePublicOrigin instead.
+export function internalOrigin() {
+  return resolveInternalOrigin(process.env);
 }
 
 export function internalHeaders() {

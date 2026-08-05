@@ -1,6 +1,6 @@
 import { defineSchedule } from "eve/schedules";
 import eve from "../channels/eve.js";
-import { appOrigin, internalHeaders } from "../lib/internal-api.js";
+import { internalHeaders, internalOrigin } from "../lib/internal-api.js";
 
 interface ScanIntake {
   id: string;
@@ -19,7 +19,7 @@ interface MetabolismScan {
 }
 
 async function scan(): Promise<MetabolismScan> {
-  const response = await fetch(`${appOrigin()}/api/internal/metabolism/scan`, {
+  const response = await fetch(`${internalOrigin()}/api/internal/metabolism/scan`, {
     headers: internalHeaders(),
   });
   if (!response.ok) throw new Error(`Metabolism scan failed: ${response.status}`);
@@ -27,7 +27,7 @@ async function scan(): Promise<MetabolismScan> {
 }
 
 async function apply(action: Record<string, unknown>) {
-  const response = await fetch(`${appOrigin()}/api/internal/metabolism/action`, {
+  const response = await fetch(`${internalOrigin()}/api/internal/metabolism/action`, {
     method: "POST",
     headers: internalHeaders(),
     body: JSON.stringify(action),

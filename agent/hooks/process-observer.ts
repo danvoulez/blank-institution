@@ -1,5 +1,5 @@
 import { defineHook } from "eve/hooks";
-import { appOrigin, internalHeaders } from "../lib/internal-api.js";
+import { internalHeaders, internalOrigin } from "../lib/internal-api.js";
 
 export default defineHook({
   events: {
@@ -7,7 +7,7 @@ export default defineHook({
       const data = "data" in event ? event.data : undefined;
       const record = data && typeof data === "object" ? data as Record<string, unknown> : {};
       try {
-        await fetch(`${appOrigin()}/api/internal/runtime/event`, {
+        await fetch(`${internalOrigin()}/api/internal/runtime/event`, {
           method: "POST",
           headers: internalHeaders(),
           body: JSON.stringify({

@@ -1,14 +1,15 @@
 import { Client } from "eve/client";
 import type { NextAction, ProcessRole } from "#shared/types/process";
+import { resolveInternalOrigin } from "#shared/origin";
 import { linkRoleSession } from "./processes";
 import { notifyHumanAssignment } from "./process-notifications";
 import { markIntakeTranslating } from "./process-intake";
 
+// The agent routes are mounted by eve/nuxt in this same Nitro app, so starting
+// a role session is a loopback call, not a trip through whatever public name
+// the app answers to.
 function eveHost() {
-  const configured = process.env.EVE_INTERNAL_ORIGIN?.trim();
-  if (configured) return configured.replace(/\/$/, "");
-  const origin = (process.env.BETTER_AUTH_URL || process.env.NUXT_PUBLIC_SITE_URL || "http://localhost:3000").replace(/\/$/, "");
-  return origin;
+  return resolveInternalOrigin(process.env);
 }
 
 function secret() {

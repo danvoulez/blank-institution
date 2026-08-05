@@ -1,9 +1,9 @@
 import type { PhoneLinkRecord } from "../../shared/types/phone-link.js";
-import { appOrigin, internalHeaders } from "./internal-api.js";
+import { internalHeaders, internalOrigin } from "./internal-api.js";
 
 export async function fetchPhoneLinkForNumber(phoneNumber: string) {
   const response = await fetch(
-    `${appOrigin()}/api/internal/phone/link?phoneNumber=${encodeURIComponent(phoneNumber)}`,
+    `${internalOrigin()}/api/internal/phone/link?phoneNumber=${encodeURIComponent(phoneNumber)}`,
     { headers: internalHeaders() },
   );
 

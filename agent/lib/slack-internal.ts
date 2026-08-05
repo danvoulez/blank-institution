@@ -1,9 +1,9 @@
 import type { SlackLinkRecord } from "../../shared/types/slack-link.js";
-import { appOrigin, internalHeaders } from "./internal-api.js";
+import { internalHeaders, internalOrigin } from "./internal-api.js";
 
 export async function fetchSlackLinkForMember(teamId: string, userId: string) {
   const response = await fetch(
-    `${appOrigin()}/api/internal/slack/link/member?teamId=${encodeURIComponent(teamId)}&userId=${encodeURIComponent(userId)}`,
+    `${internalOrigin()}/api/internal/slack/link/member?teamId=${encodeURIComponent(teamId)}&userId=${encodeURIComponent(userId)}`,
     { headers: internalHeaders() },
   );
 
@@ -23,7 +23,7 @@ export async function consumeSlackLinkCodeRemote(input: {
   slackDisplayName?: string;
   slackEmail?: string;
 }) {
-  const response = await fetch(`${appOrigin()}/api/internal/slack/link/consume`, {
+  const response = await fetch(`${internalOrigin()}/api/internal/slack/link/consume`, {
     method: "POST",
     headers: internalHeaders(),
     body: JSON.stringify(input),
