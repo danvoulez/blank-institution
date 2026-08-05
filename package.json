@@ -1,7 +1,7 @@
 {
-  "name": "personal-agent-template",
+  "name": "eve-institution",
   "version": "0.0.0",
-  "description": "A durable personal AI assistant template built with Eve, Nuxt 4, and Better Auth",
+  "description": "Executable institution built on Eve 0.30.6 and the Personal Agent Template",
   "license": "MIT",
   "author": "Hugo Richard",
   "repository": {
@@ -20,12 +20,17 @@
     "#*": "./agent/*"
   },
   "scripts": {
+    "process:generate": "node scripts/generate-process-types.mjs",
+    "predev": "pnpm process:generate",
+    "prebuild": "pnpm process:generate",
+    "pretypecheck": "pnpm process:generate",
     "build": "nuxt build",
     "dev": "nuxt dev",
     "start": "nuxt preview",
     "typecheck": "nuxt typecheck",
     "db:generate": "nuxt db generate",
-    "db:migrate": "nuxt db migrate"
+    "db:migrate": "nuxt db migrate",
+    "test:process": "node --experimental-strip-types --test server/utils/process-machine.test.ts"
   },
   "dependencies": {
     "@comark/nuxt": "^0.5.0",
@@ -42,19 +47,20 @@
     "chat-adapter-sendblue": "^0.2.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "eve": "^0.30.6",
+    "eve": "0.30.6",
     "maska": "^3.2.0",
     "nuxt": "^4.4.8",
     "shiki": "^4.3.1",
     "tailwindcss": "^4.3.2",
     "vue": "^3.5.39",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@ai-sdk/openai-compatible": "^3.0.16",
+    "microsandbox": "^0.6.5"
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.116",
     "@iconify-json/simple-icons": "^1.2.89",
     "@types/node": "26.1.0",
-    "microsandbox": "^0.6.5",
     "typescript": "^6.0.3",
     "vue-tsc": "^3.3.6"
   }

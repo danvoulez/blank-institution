@@ -1,41 +1,32 @@
-import { defineTool } from "eve/tools";
+import { defineDynamic, defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { z } from "zod";
 import { MEMORY_CATEGORIES } from "../lib/memory-categories.js";
 import { saveMemoryRemote } from "../lib/memory-internal.js";
+import { institutionContext } from "../lib/role-context.js";
 
 const updateSchema = z.object({
-  category: z.enum(MEMORY_CATEGORIES).describe("Memory category to update"),
-  content: z.string().min(1).describe("Full replacement prose for this category (not a partial delta)"),
+  category: z.enum(MEMORY_CATEGORIES),
+  content: z.string().min(1),
 });
 
-export default defineTool({
-  description:
-    "Propose saving memory updates. Requires one user approval for the whole batch. When several categories change, include every update in a single call — never parallel save_memory calls.",
-  inputSchema: z.object({
-    reason: z.string().min(1).describe("Brief explanation of why these updates are worth remembering"),
-    updates: z.array(updateSchema).min(1).max(5).describe("Category updates to save together"),
-  }),
-  approval: always(),
-  async execute({ updates }, ctx) {
-    const userId = ctx.session.auth.current?.principalId;
-    if (!userId) {
-      throw new Error("Cannot save memory without an authenticated user");
-    }
-
-    const results = [];
-    for (const update of updates) {
-      const result = await saveMemoryRemote({
-        userId,
-        category: update.category,
-        content: update.content,
+export default defineDynamic({
+  events: {
+    "session.started": (_event, ctx) => {
+      const institution = institutionContext(ctx);
+      if (institution.role !== "translator" || !institution.userId) return null;
+      return defineTool({
+        description: "Propose long-term user memory updates. This is user context, never institutional process state.",
+        inputSchema: z.object({ reason: z.string().min(1), updates: z.array(updateSchema).min(1).max(5) }),
+        approval: always(),
+        async execute({ updates }) {
+          const results = [];
+          for (const update of updates) {
+            results.push(await saveMemoryRemote({ userId: institution.userId!, category: update.category, content: update.content }));
+          }
+          return { results };
+        },
       });
-      results.push({
-        category: update.category,
-        saved: result.saved,
-      });
-    }
-
-    return { results };
+    },
   },
 });

@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import type { SendFn, SendOptions } from "eve/channels";
 import { defineChannel, POST } from "eve/channels";
 import type { SendblueMessagePayload } from "chat-adapter-sendblue";
 import { agent } from "../../shared/agent.js";
 import { buildAppSessionAuth } from "../../shared/slack-auth.js";
 import { fetchPhoneLinkForNumber } from "../lib/phone-internal.js";
+import { createIntakeRemote, getActiveProcessRemote } from "../lib/process-internal.js";
 import {
   contactNumberFromPayload,
   getSendblueAdapter,
@@ -77,7 +79,14 @@ function threadIdForState(
   return state.threadId;
 }
 
-const pendingInputByThread = new Map<string, PendingInputRequest[]>();
+interface PendingInputState {
+  requests: PendingInputRequest[];
+  auth: SendOptions<SendblueChannelState>["auth"];
+  continuationToken: string;
+  state: SendblueChannelState;
+}
+
+const pendingInputByThread = new Map<string, PendingInputState>();
 
 interface InflightSend {
   send: SendFn<SendblueChannelState>;
@@ -114,14 +123,11 @@ async function resolvePendingInput(
   threadId: string,
   text: string,
   send: SendFn<SendblueChannelState>,
-  sendOptions: SendOptions<SendblueChannelState>,
 ) {
   const pending = pendingInputByThread.get(threadId);
-  if (!pending?.length) {
-    return false;
-  }
+  if (!pending?.requests.length) return false;
 
-  const onlySaveMemory = pending.every(isSaveMemoryRequest);
+  const onlySaveMemory = pending.requests.every(isSaveMemoryRequest);
   const approval = onlySaveMemory ? "deny" : parseApprovalReply(text);
 
   if (!approval) {
@@ -139,16 +145,16 @@ async function resolvePendingInput(
   try {
     inflightSend = {
       send,
-      auth: sendOptions.auth,
-      continuationToken: sendOptions.continuationToken,
-      state: sendOptions.state,
+      auth: pending.auth,
+      continuationToken: pending.continuationToken,
+      state: pending.state,
     };
     await send(
-      { inputResponses: pending.map(request => ({
+      { inputResponses: pending.requests.map(request => ({
         requestId: request.requestId,
         optionId: approval,
       })) },
-      sendOptions,
+      { auth: pending.auth, continuationToken: pending.continuationToken, state: pending.state },
     );
   } finally {
     inflightSend = null;
@@ -159,7 +165,7 @@ async function resolvePendingInput(
       threadId,
       `Memory saves are not available in iMessage. Edit your profile at ${profileSettingsUrl()}.`,
     );
-    return false;
+    return true;
   }
 
   return true;
@@ -191,37 +197,68 @@ async function dispatchInbound(
     return;
   }
 
-  const auth = buildAppSessionAuth(link.appUserId, {
+  const fromNumber = resolveSendblueLineNumber(payload);
+  const baseAuth = buildAppSessionAuth(link.appUserId, {
     channel: "sendblue",
     phone_number: contactNumber,
+    role: "translator",
+    userId: link.appUserId,
   });
 
-  const fromNumber = resolveSendblueLineNumber(payload);
-
-  const sendOptions = {
-    auth,
-    continuationToken: threadId,
-    state: {
-      threadId,
-      contactNumber,
-      fromNumber,
-      groupId: payload.group_id?.length ? payload.group_id : null,
-      isGroup: Boolean(payload.group_id?.length),
-      pendingToolCallMessage: null,
-    } satisfies SendblueChannelState,
-  };
-
   try {
-    const blocked = await resolvePendingInput(threadId, text, send, sendOptions);
-    if (blocked) {
-      return;
+    const blocked = await resolvePendingInput(threadId, text, send);
+    if (blocked) return;
+
+    const active = await getActiveProcessRemote(link.appUserId, "imessage");
+    let auth = baseAuth;
+    let institutionContext: string;
+    let sessionKey: string;
+
+    if (active.process) {
+      auth = {
+        ...baseAuth,
+        attributes: {
+          ...baseAuth.attributes,
+          processId: active.process.id,
+          intakeId: active.process.intakeId,
+        },
+      };
+      sessionKey = active.process.intakeId;
+      institutionContext = `Continue active process ${active.process.id}. This message belongs to that process; do not create another intake.`;
+    } else {
+      const rawPayload = payload as unknown as Record<string, unknown>;
+      const messageKey = String(rawPayload.message_handle ?? rawPayload.id ?? rawPayload.date_sent ?? `${threadId}:${text}`);
+      const { intake } = await createIntakeRemote({
+        userId: link.appUserId,
+        source: "imessage",
+        rawRequest: text,
+        idempotencyKey: `imessage:${createHash("sha256").update(`${contactNumber}:${messageKey}`).digest("hex")}`,
+      });
+      auth = {
+        ...baseAuth,
+        attributes: { ...baseAuth.attributes, intakeId: intake.id },
+      };
+      sessionKey = intake.id;
+      institutionContext = `Institution intake: ${intake.id}. Call submit_for_supervision exactly once.`;
     }
 
-    inflightSend = { send, auth, continuationToken: threadId, state: sendOptions.state };
+    const sendOptions = {
+      auth,
+      continuationToken: `${threadId}:${sessionKey}`,
+      state: {
+        threadId,
+        contactNumber,
+        fromNumber,
+        groupId: payload.group_id?.length ? payload.group_id : null,
+        isGroup: Boolean(payload.group_id?.length),
+        pendingToolCallMessage: null,
+      } satisfies SendblueChannelState,
+    };
+    inflightSend = { send, auth, continuationToken: sendOptions.continuationToken, state: sendOptions.state };
     await send(
       {
         message: text,
-        context: [...IMESSAGE_CHANNEL_CONTEXT],
+        context: [...IMESSAGE_CHANNEL_CONTEXT, institutionContext],
       },
       sendOptions,
     );
@@ -401,7 +438,14 @@ export default defineChannel<SendblueChannelState, SendblueChannelContext>({
         return;
       }
 
-      pendingInputByThread.set(threadId, pending);
+      if (inflightSend) {
+        pendingInputByThread.set(threadId, {
+          requests: pending,
+          auth: inflightSend.auth,
+          continuationToken: inflightSend.continuationToken,
+          state: { ...channel.state },
+        });
+      }
 
       if (onlySaveMemory) {
         await postToThread(

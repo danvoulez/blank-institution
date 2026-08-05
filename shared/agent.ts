@@ -1,11 +1,11 @@
-// Customize agent branding here (name, slug, tagline, avatar).
+// Institution branding. Runtime roles are selected dynamically per Eve session.
 export const agent = {
-  name: "V",
-  slug: "v",
-  tagline: "What do you need?",
+  name: "Eve Institution",
+  slug: "eve-institution",
+  tagline: "Every need becomes accountable work.",
   description:
-    "Remembers your context across conversations and channels.",
+    "A durable institution where every intake is analyzed, assigned, executed, reviewed, and recovered.",
   avatar: {
-    icon: "i-lucide-bot",
+    icon: "i-lucide-network",
   },
 } as const;

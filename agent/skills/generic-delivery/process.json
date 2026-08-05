@@ -1,0 +1,37 @@
+{
+  "id": "generic-delivery",
+  "version": "1.0.0",
+  "name": "Generic delivery",
+  "description": "Produce a concrete deliverable, review it against explicit acceptance criteria, and return corrections until accepted.",
+  "ownerPolicy": {
+    "allowed": ["supervisor", "human"],
+    "default": "supervisor"
+  },
+  "responsiblePolicy": {
+    "allowed": ["executor", "human"],
+    "default": "executor"
+  },
+  "deadlinePolicy": {
+    "allowed": ["urgent", "24h", "1w", "1m"],
+    "default": "24h"
+  },
+  "openingCheckpoint": {
+    "required": ["typeOwner", "currentResponsible", "objective", "deadline"]
+  },
+  "stages": [
+    {
+      "id": "deliver",
+      "title": "Produce the deliverable",
+      "responsible": "either",
+      "requiredCapabilities": ["sandbox", "files"],
+      "instructions": "Produce the requested deliverable and persist every relevant artifact in the dossier.",
+      "review": {
+        "reviewer": "typeOwner",
+        "allowedDecisions": ["accept", "return", "reassign", "escalate", "complete", "cancel", "fail"]
+      }
+    }
+  ],
+  "completion": {
+    "requiresAcceptedClosureCheckpoint": true
+  }
+}

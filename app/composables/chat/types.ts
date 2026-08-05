@@ -18,7 +18,7 @@ export interface ChatSession {
   status: Ref<ChatStatus> | ComputedRef<ChatStatus>;
   error: Ref<Error | undefined> | ComputedRef<Error | undefined>;
   isBusy: ComputedRef<boolean>;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (text: string, context?: { intakeId?: string; processId?: string }) => Promise<void>;
   sendInputResponses: (responses: AgentInputResponse[]) => Promise<void>;
   stop: () => void;
   reset: () => void;

@@ -9,6 +9,7 @@ import { clearCachedPayloadData } from "~/utils/payload-cache";
 type PendingMessage = {
   chatId: string;
   text: string;
+  intakeId: string;
 };
 
 let pendingMessage: PendingMessage | null = null;
@@ -73,8 +74,17 @@ export async function startChat(message: string, chatId = crypto.randomUUID()) {
     },
   });
 
+  const { intake } = await $fetch<{ intake: { id: string } }>("/api/process-intakes", {
+    method: "POST",
+    body: {
+      rawRequest: text,
+      idempotencyKey: `web:${chatId}`,
+      threadId: chatId,
+    },
+  });
+
   upsertThreadInListCache(thread);
-  pendingMessage = { chatId, text };
+  pendingMessage = { chatId, text, intakeId: intake.id };
   await refreshThreadList();
   await navigateWithChatPromptTransition(`/chat/${chatId}`);
 }
@@ -82,9 +92,9 @@ export async function startChat(message: string, chatId = crypto.randomUUID()) {
 export function consumePendingMessage(chatId: string) {
   if (pendingMessage?.chatId !== chatId) return null;
 
-  const text = pendingMessage.text;
+  const value = { text: pendingMessage.text, intakeId: pendingMessage.intakeId };
   pendingMessage = null;
-  return text;
+  return value;
 }
 
 export async function startNewChat() {
@@ -95,11 +105,11 @@ export async function startNewChat() {
 }
 
 export function useChatNavigation(chatId: MaybeRefOrGetter<string>) {
-  function consumePendingOnMount(sendMessage: (text: string) => Promise<void>) {
+  function consumePendingOnMount(sendMessage: (text: string, context?: { intakeId?: string }) => Promise<void>) {
     const id = toValue(chatId);
     const pending = consumePendingMessage(id);
     if (pending) {
-      void sendMessage(pending);
+      void sendMessage(pending.text, { intakeId: pending.intakeId });
       return true;
     }
     return false;

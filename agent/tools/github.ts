@@ -7,8 +7,11 @@ export default defineDynamic({
   events: {
     "session.started": async (_event, ctx) => {
       const auth = ctx.session.auth.current;
-      const userId = auth?.principalId;
-      if (!userId || userId.startsWith("eve:")) {
+      const role = auth?.attributes && typeof auth.attributes === "object" ? auth.attributes.role : undefined;
+      if (role === "supervisor" || role === "metabolism") return {};
+      const attributedUserId = auth?.attributes && typeof auth.attributes === "object" ? auth.attributes.userId : undefined;
+      const userId = typeof attributedUserId === "string" ? attributedUserId : auth?.principalId;
+      if (!userId || userId.startsWith("eve:") || userId.startsWith("institution:") && typeof attributedUserId !== "string") {
         return {};
       }
 

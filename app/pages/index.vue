@@ -23,30 +23,21 @@ function onSubmit() {
   createChat(input.value);
 }
 
-function summarizeDay() {
-  void startChat("Summarize my day using the daily-summary skill.");
-}
-
 const quickChats = [
   {
-    label: "Who are you?",
-    icon: "i-lucide-user-round",
-    action: () => createChat("Who are you?"),
+    label: "Deliver a concrete result",
+    icon: "i-lucide-package-check",
+    action: () => createChat("Start a generic delivery process. Help me define the concrete deliverable, acceptance criteria, responsible, and deadline."),
   },
   {
-    label: "What can you help me with?",
-    icon: "i-lucide-message-circle-question",
-    action: () => createChat("What can you help me with?"),
+    label: "Show active processes",
+    icon: "i-lucide-workflow",
+    action: () => navigateTo("/processes"),
   },
   {
-    label: "What is the weather in Paris?",
-    icon: "i-lucide-sun",
-    action: () => createChat("What is the weather in Paris?"),
-  },
-  {
-    label: "Summarize my day",
-    icon: "i-lucide-calendar-days",
-    action: summarizeDay,
+    label: "Explain how this works",
+    icon: "i-lucide-circle-help",
+    action: () => createChat("Explain the institution hierarchy, checkpoints, assignments, and how my request will be processed."),
   },
 ];
 </script>
@@ -69,7 +60,7 @@ const quickChats = [
               {{ greeting }}
             </h1>
             <p class="text-sm text-muted sm:text-base">
-              V — your personal agent
+              Eve Institution — accountable work from intake to delivery
             </p>
           </div>
 

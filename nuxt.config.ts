@@ -3,6 +3,9 @@ const noStore = { "cache-control": "no-store" } as const;
 
 export default defineNuxtConfig({
   modules: ["@nuxt/ui", "@comark/nuxt", "eve/nuxt", "@nuxthub/core", "@vercel/analytics"],
+  eve: {
+    eveBuildCommand: "pnpm process:generate && eve build",
+  },
   css: ["~/assets/css/main.css"],
   devtools: { enabled: true },
   compatibilityDate: "latest",
@@ -14,6 +17,7 @@ export default defineNuxtConfig({
     "/login": { prerender: true },
     "/": { ssr: true, headers: privateNoStore },
     "/chat/**": { ssr: true, headers: privateNoStore },
+    "/processes/**": { ssr: true, headers: privateNoStore },
     "/settings/**": { ssr: true, headers: privateNoStore },
     "/api/auth/**": { headers: noStore },
     "/api/internal/**": { headers: noStore },
@@ -24,9 +28,15 @@ export default defineNuxtConfig({
     "/api/memory": { headers: privateNoStore },
     "/api/memory/**": { headers: privateNoStore },
     "/api/connectors": { headers: privateNoStore },
+    "/api/processes": { headers: privateNoStore },
+    "/api/processes/**": { headers: privateNoStore },
+    "/api/process-intakes/**": { headers: privateNoStore },
+    "/api/process-types": { headers: privateNoStore },
+    "/api/process-api-tokens/**": { headers: privateNoStore },
+    "/api/runtime": { headers: privateNoStore },
+    "/api/mcp": { headers: noStore },
     "/api/slack/**": { headers: privateNoStore },
     "/api/integrations/**": { headers: privateNoStore },
-    "/_eve_internal/**": { headers: noStore },
   },
   nitro: {
     compressPublicAssets: true,
@@ -38,7 +48,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { lang: "en" },
-      title: "V",
+      title: "Eve Institution",
       titleTemplate: "%s",
       charset: "utf-8",
       viewport: "width=device-width, initial-scale=1",
@@ -46,7 +56,7 @@ export default defineNuxtConfig({
         {
           name: "description",
           content:
-            "Your personal AI agent. Chat on the web, Slack, or iMessage — query Linear and pick up where you left off.",
+            "A durable process institution powered by Eve: every intake is analyzed, assigned, executed, reviewed, and recovered.",
         },
         { name: "theme-color", content: "#1b1718" },
         { name: "color-scheme", content: "light dark" },

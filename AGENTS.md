@@ -1,63 +1,42 @@
-# Personal Agent Template
+# Eve Institution development guide
 
-Durable personal AI assistant built with Eve and Nuxt.
+This repository is a complete process institution on Eve 0.30.6 and Nuxt 4.
 
-## Quick Reference
+## Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm install` | Install dependencies |
-| `pnpm dev` | Start Nuxt + Eve dev server |
-| `pnpm build` | Production build |
-| `pnpm typecheck` | TypeScript check |
-| `pnpm db:generate` | Generate Drizzle migrations |
-| `pnpm db:migrate` | Apply migrations |
-
-## Structure
-
-```
-personal-agent-template/
-├── agent/          # Eve agent (channels, tools, skills, connections)
-├── app/            # Nuxt UI (pages, components, composables)
-├── server/         # Nitro API, Drizzle schema, server utils
-├── shared/         # Cross-layer types and helpers
-└── docs/           # Architecture, environment, customization
+```bash
+pnpm install
+pnpm process:generate
+pnpm db:migrate
+pnpm dev
+pnpm typecheck
+pnpm test:process
 ```
 
-## Documentation
+Node.js 24+ is required by the project.
 
-- [Architecture](docs/ARCHITECTURE.md) — System design, request flows, internal API
-- [Environment](docs/ENVIRONMENT.md) — Environment variables
-- [Customization](docs/CUSTOMIZATION.md) — Rename agent, add tools, integrations
-- [README](README.md) — Quick start and feature overview
+## Non-negotiable architecture
 
-## Eve Framework
+- Do not fork Eve or create a parallel agent/session/stream/sandbox/scheduler runtime.
+- The four LLM roles are authenticated Eve sessions of one dynamic agent.
+- Intake must exist before the first model call.
+- All state transitions go through server domain functions and durable records.
+- Hooks observe runtime events; they do not decide institutional authority.
+- Process types are Skill packages: `SKILL.md + process.json`.
+- Executor work uses Eve's built-in sandbox and file tools.
+- Human assignments are durable even when external notification delivery fails.
 
-This project uses Eve with a Nuxt frontend (`eve/nuxt` module). Before writing agent code, read the relevant guide in `node_modules/eve/dist/docs/public/`.
+## Main paths
 
-## Internal API Pattern
+- `agent/agent.ts`: dynamic model routing.
+- `agent/instructions.ts`: role and dossier prompt composition.
+- `agent/tools/process.ts`: role-specific authority/tool surface.
+- `agent/hooks/process-observer.ts`: runtime fact projection.
+- `agent/schedules/metabolism.ts`: liveness clock.
+- `server/utils/processes.ts`: process/checkpoint/assignment transactions.
+- `server/utils/eve-control-plane.ts`: official Eve Client sessions.
+- `shared/types/process.ts`: domain contracts.
+- `agent/skills/*`: Process Skills.
+- `app/pages/processes/*`: operational UI.
 
-The Eve agent calls Nuxt over HTTP:
-
-```
-agent/lib/*-internal.ts  →  /api/internal/*  →  server/utils/*
-```
-
-Authenticated with `Authorization: Bearer <INTERNAL_API_SECRET>`. See [`server/utils/internal-api.ts`](server/utils/internal-api.ts).
-
-## Memory Flow
-
-1. **Session injection** — [`agent/instructions.ts`](agent/instructions.ts) on `session.started`
-2. **Agent save** — [`agent/tools/save_memory.ts`](agent/tools/save_memory.ts) with web approval UI
-3. **Profile UI** — import, view, edit, delete on Settings → Profile
-
-Categories: [`shared/types/memory.ts`](shared/types/memory.ts). One prose block per category; saves replace the full block.
-
-## Customization Checklist
-
-- [`shared/agent.ts`](shared/agent.ts) — branding
-- [`agent/lib/base-instructions.ts`](agent/lib/base-instructions.ts) — persona
-- [`agent/channels/slack.ts`](agent/channels/slack.ts) — Slack Connect slug
-- [`agent/agent.ts`](agent/agent.ts) — AI model
-
-See [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) for details.
+Read `docs/CLI-AUDIT.md`, `docs/ARCHITECTURE.md`, and `VALIDATION.md` before changing runtime assumptions.

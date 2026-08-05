@@ -41,10 +41,19 @@ export function createEveChatSession(
     () => status.value === "submitted" || status.value === "streaming",
   );
 
-  async function sendMessage(text: string) {
+  async function sendMessage(text: string, context?: { intakeId?: string; processId?: string }) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    await agent.value.send({ message: trimmed });
+    await agent.value.send({
+      message: trimmed,
+      ...(context ? {
+        clientContext: { institution: { role: "translator", ...context } },
+        headers: {
+          ...(context.intakeId ? { "x-institution-intake-id": context.intakeId } : {}),
+          ...(context.processId ? { "x-institution-process-id": context.processId } : {}),
+        },
+      } : {}),
+    });
   }
 
   async function sendInputResponses(responses: AgentInputResponse[]) {

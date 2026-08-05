@@ -1,166 +1,77 @@
-# Personal Agent Template — Architecture
+# Architecture
 
-> Back to [README](../README.md) | See also: [Environment](./ENVIRONMENT.md), [Customization](./CUSTOMIZATION.md)
+## Runtime topology
 
-This document describes the technical architecture of Personal Agent Template — a durable personal AI assistant built with Eve, Nuxt 4, and Better Auth.
-
-## System overview
-
-The app runs as two cooperating services on Vercel:
-
-```mermaid
-flowchart TB
-  subgraph surfaces [User surfaces]
-    web[Web chat — Nuxt]
-    slack[Slack DMs and mentions]
-    imessage[iMessage — Sendblue]
-  end
-
-  subgraph eve [Eve agent — agent/]
-    channels[Channels: eve · slack · sendblue]
-    tools[Tools: weather · save_memory]
-    skills[Skills and connections: Linear MCP]
-  end
-
-  subgraph nuxt [Nuxt app — app/ + server/]
-    api["/api/* — public API"]
-    internal["/api/internal — agent-only"]
-    auth[Better Auth]
-    db[(NuxtHub SQLite — Drizzle)]
-  end
-
-  connect[Vercel Connect — Linear · Slack]
-
-  surfaces --> eve
-  eve -->|"HTTP + Bearer INTERNAL_API_SECRET"| nuxt
-  api --> db
-  internal --> db
-  auth --> db
-  nuxt --> connect
+```text
+Human / source system
+  ├─ web chat
+  ├─ Slack
+  ├─ iMessage
+  ├─ public API
+  └─ MCP
+          │
+          ▼
+Nuxt intake/domain service ─────────────── SQLite / Turso
+          │                                intakes
+          │ Eve Client                     processes
+          ▼                                checkpoints
+Eve dynamic root agent                    assignments
+  ├─ Translator session (premium)          artifacts
+  ├─ Supervisor session (premium)          API tokens
+  ├─ Executor session (local large)         runtime receipts
+  └─ Metabolism session (local small)
+          │
+          ├─ Eve stream + hooks
+          ├─ Eve sandbox/files/shell
+          ├─ Eve Skills
+          └─ Eve connections
 ```
 
-| Vercel service | Entry | Role |
-|----------------|-------|------|
-| `web` | `/` | Nuxt UI + Nitro API |
-| `eve` | `/_eve_internal/eve` | Eve agent runtime |
+All four LLM roles are sessions of the same dynamically composed agent. This keeps one Eve deployment while allowing different models, prompts, tools, context, and authority.
 
-Configured in [`vercel.json`](../vercel.json).
+## Authority boundaries
 
-## Project structure
+| Role | May do | May not do |
+|---|---|---|
+| Translator | normalize intake, report status, ask for missing context | execute work or accept delivery |
+| Supervisor | select Skill, open process, review checkpoint, assign | execute the work segment |
+| Executor | claim assignment, use sandbox/capabilities, store artifacts, submit | approve itself or choose successor |
+| Metabolism | retry, resume, remind, escalate, clean orphan state | alter objective or accept delivery |
+| Human | act as type owner, responsible, or approver when assigned | mutate another user's process |
 
-```
-personal-agent-template/
-├── agent/                    # Eve agent
-│   ├── agent.ts              # Model and agent config
-│   ├── channels/             # eve (web), slack, sendblue
-│   ├── tools/                # weather, save_memory
-│   ├── skills/               # e.g. daily-summary.md
-│   ├── connections/          # Linear MCP
-│   ├── lib/                  # base-instructions, memory-internal, slack-internal
-│   └── instructions.ts       # session.started hooks (memory injection)
-├── app/                      # Nuxt frontend
-│   ├── pages/                # chat, settings, login
-│   ├── components/           # chat UI, profile, integrations
-│   └── composables/          # useMemory, useProfile, chat providers
-├── server/                   # Nitro API
-│   ├── api/                  # Public + internal routes
-│   ├── db/                   # Drizzle schema + migrations
-│   └── utils/                # memory, profile, auth, connectors
-├── shared/                   # Cross-layer types and helpers
-│   ├── agent.ts              # Branding metadata
-│   └── types/                # memory, profile, thread, connector
-└── docs/                     # Documentation
-```
+Tools are dynamically omitted outside the authorized role. Server routes independently validate user, actor, current state, Skill policy, and process revision.
 
-## Request flows
+## Source of truth
 
-### Web chat
+- Eve stream: durable runtime execution evidence.
+- `process_checkpoints`: institutional decisions.
+- `process_assignments`: calls, claims, leases, work lifecycle.
+- `process_artifacts`: durable handoff dossier.
+- process row: current projection/head.
+- cards and pages: human-readable projections.
 
-1. User opens `/chat/[id]` — Nuxt loads thread via `/api/threads`
-2. Chat streams through Eve's Nuxt module (`eve/nuxt`)
-3. Tool calls render in [`MessageContentEve.vue`](../app/components/chat/message/MessageContentEve.vue)
-4. `save_memory` shows approval UI ([`ToolSaveMemory.vue`](../app/components/chat/tool/ToolSaveMemory.vue))
+There is no copied event store. `process_runtime_receipts` only prevents duplicate event effects and associates failures/waiting boundaries with institutional records.
 
-### Session memory injection
+## Atomic invariants
 
-1. Eve fires `session.started` ([`agent/instructions.ts`](../agent/instructions.ts))
-2. Agent calls `GET /api/internal/memory?userId=...` with bearer token
-3. [`agent/lib/memory-internal.ts`](../agent/lib/memory-internal.ts) builds prompt section
-4. Appended to agent instructions for the session
+1. Intake is persisted before the first model call.
+2. Intake analysis is terminally accountable: `converted`, or `failed` with reason and human escalation after the configured retry budget.
+3. Opening is one transaction: process, opening checkpoint, first assignment, intake conversion.
+4. Assignment claim is conditional on `status=attempting`.
+5. Review is conditional on expected process revision.
+6. Only one current responsible exists in the process projection.
+7. Terminal processes cannot be resumed by normal transition code.
+8. Human actors are canonicalized to the authenticated owner; LLM actors have canonical institution IDs.
+9. A human type owner receives review work directly; the Supervisor cannot silently replace them.
 
-Start a **new chat** after importing memory so injection picks up changes.
+## Process Skills
 
-### Slack
+The filesystem package is the process type registry. The generated index solves the two-service boundary: Eve reads the Skill, while Nuxt and UI read the same generated mechanical manifest. No runtime CRUD table is needed.
 
-1. Slack events hit Eve's slack channel ([`agent/channels/slack.ts`](../agent/channels/slack.ts))
-2. Linked users map Slack ID → app user via `slack_links` table
-3. Unlinked users get instructions to generate a link code in the web app
-4. Link flow: web generates code → user DMs `link <code>` → agent consumes via internal API
+## Recovery
 
-### Sendblue (iMessage)
-
-1. Sendblue delivers inbound messages to Eve's sendblue channel ([`agent/channels/sendblue.ts`](../agent/channels/sendblue.ts))
-2. The sender's E.164 number maps to an app user via `phone_links` (set in **Settings → Profile**)
-3. Unlinked senders receive instructions to add their number in the web app
-4. Replies go back through Sendblue; tool approvals link to the web chat
-
-### Integrations (Linear)
-
-1. User connects Linear in **Settings → Integrations**
-2. Vercel Connect provisions MCP credentials
-3. Eve connection ([`agent/connections/linear.ts`](../agent/connections/linear.ts)) exposes Linear tools to the agent
-
-## Internal API
-
-Routes under `/api/internal/*` require:
-
-```
-Authorization: Bearer <INTERNAL_API_SECRET>
-```
-
-Validated in [`server/utils/internal-api.ts`](../server/utils/internal-api.ts).
-
-| Route | Purpose |
-|-------|---------|
-| `GET /api/internal/memory` | Fetch user memory for session injection |
-| `POST /api/internal/memory` | Save memory from agent tool |
-| `GET /api/internal/phone/link` | Resolve phone number → app user |
-| `GET /api/internal/slack/link/member` | Resolve Slack user → app user |
-| `POST /api/internal/slack/link/consume` | Consume link code |
-
-Agent-side clients live in `agent/lib/*-internal.ts`.
-
-## Database
-
-SQLite via [NuxtHub](https://hub.nuxt.com). Schema in [`server/db/schema/`](../server/db/schema/).
-
-Key tables:
-
-| Table | Purpose |
-|-------|---------|
-| `user` / `session` / `account` | Better Auth |
-| `threads` | Chat threads |
-| `user_profile` | Name, timezone, phone |
-| `user_memory` | Long-term memory by category |
-| `phone_links` | Phone ↔ app user mapping (Sendblue/iMessage) |
-| `slack_links` | Slack ↔ app user mapping |
-| `slack_link_codes` | Temporary link codes |
-
-Migrations: `pnpm db:generate` → `pnpm db:migrate`.
-
-## Memory model
-
-- **Categories** — fixed set in [`shared/types/memory.ts`](../shared/types/memory.ts)
-- **One block per category** — `setMemoryForCategory` replaces all rows for a category
-- **Sources** — `import`, `agent`, `manual`
-- **Import** — Raycast-style paste parser ([`server/utils/memory-import.ts`](../server/utils/memory-import.ts))
-
-## Auth
-
-[Better Auth](https://www.better-auth.com) with email/password. Config: [`server/utils/auth.ts`](../server/utils/auth.ts), route: [`server/api/auth/[...all].ts`](../server/api/auth/[...all].ts).
-
-Global middleware: [`app/middleware/auth.global.ts`](../app/middleware/auth.global.ts).
-
-## Eve docs
-
-For channels, tools, connections, and deployment details, read Eve guides in `node_modules/eve/dist/docs/public/`.
+- failures observed by hooks create recovery checkpoints and block the process;
+- assignment leases expire deterministically;
+- the Metabolism schedule deterministically enforces intake/assignment/sandbox invariants, then the local-small role applies a small allowed command union for interpretation-bearing recovery and escalation;
+- `event.meta.id` and effect coordinates make hook projections idempotent;
+- Eve continuation tokens and Client reset/cancel primitives are reused.

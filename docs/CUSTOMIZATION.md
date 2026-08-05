@@ -1,158 +1,142 @@
-# Customization Guide
+# Customization guide
 
-> Back to [README](../README.md) | See also: [Environment](./ENVIRONMENT.md), [Architecture](./ARCHITECTURE.md)
+The institution is customized through Process Skills, role routing, channels, and branding. The universal process loop should not be forked for each department.
 
-Personal Agent Template ships with **V** as the example persona. This guide covers how to fork and make it yours.
+## 1. Add or change a Process Skill
 
-## 1. Rename your agent
+Create one package:
 
-### Branding metadata
-
-Edit [`shared/agent.ts`](../shared/agent.ts):
-
-```typescript
-export const agent = {
-  name: "My Agent",
-  slug: "my-agent",
-  tagline: "Your personal AI assistant",
-  description: "Remembers your context across conversations and channels.",
-  avatar: {
-    icon: "i-lucide-bot", // or any Lucide icon
-  },
-} as const;
+```text
+agent/skills/<process-type>/
+├── SKILL.md
+└── process.json
 ```
 
-Also update site metadata in [`app/app.config.ts`](../app/app.config.ts) (`site.name`, `site.title`, `site.description`, `site.tagline`).
+`SKILL.md` is the operational playbook visible to the LLM roles. It should define the deliverable, stage expectations, evidence, review behavior, and limitations.
 
-Replace branding assets in [`public/`](../public/):
+`process.json` is the mechanical contract used by the server and UI:
 
-| File | Purpose |
-|------|---------|
-| `banner.png` | README hero banner |
-| `og.png` | Open Graph / Twitter card preview |
-| `favicon.ico` | Browser tab icon |
+- allowed/default type owner;
+- allowed/default responsible;
+- allowed/default deadline classes;
+- mandatory opening fields;
+- stages and required capabilities;
+- decisions permitted at review;
+- accepted closure requirement.
 
-Use your own design files when ready — keep them in `public/` and update `site.ogImage` in [`app/app.config.ts`](../app/app.config.ts) if the path changes.
+After adding or modifying a package:
 
-This name appears in the navbar, settings, and integration cards.
-
-### Persona and behavior
-
-Edit [`agent/lib/base-instructions.ts`](../agent/lib/base-instructions.ts) — system prompt, tone, tool usage rules, memory behavior.
-
-Search the codebase for `V` to update remaining UI copy in Vue components.
-
-### Package metadata
-
-Update [`package.json`](../package.json) `name`, `description`, and `repository` if you publish your fork.
-
-## 2. Change the AI model
-
-Edit [`agent/agent.ts`](../agent/agent.ts):
-
-```typescript
-export default defineAgent({
-  model: "anthropic/claude-sonnet-4.6", // change provider/model
-  // ...
-});
+```bash
+pnpm process:generate
+pnpm test:process
 ```
 
-See Eve docs for supported models and provider options.
+The generator validates every manifest and writes `shared/generated/process-types.ts`. A new type requires no process-engine code and no database migration.
 
-## 3. Memory categories
+## 2. Configure the hierarchy's models
 
-Categories are defined in [`shared/types/memory.ts`](../shared/types/memory.ts):
+Set environment defaults in `.env`, then use Settings → Runtime for persistent routing changes that should apply to new sessions.
 
-- `MEMORY_CATEGORIES` — enum values
-- `MEMORY_CATEGORY_LABELS` — UI labels
-- `MEMORY_CATEGORY_HEADERS` — import parser aliases
+- Translator: premium synchronous/live model.
+- Supervisor: premium asynchronous model.
+- Executor: large local OpenAI-compatible model.
+- Metabolism: small local OpenAI-compatible model.
 
-If you add or rename categories, also update:
+The session role is authenticated server metadata, not prompt text. `agent/agent.ts` uses Eve `defineDynamic` to select the model. `agent/instructions.ts` and `agent/tools/process.ts` select the matching prompt and authority surface.
 
-- [`shared/memory/export-prompt.ts`](../shared/memory/export-prompt.ts) — ChatGPT export prompt
-- [`agent/tools/save_memory.ts`](../agent/tools/save_memory.ts) — imports categories from shared types
+API keys remain environment variables. The Runtime page never returns or stores them.
 
-Each category stores **one prose block**. Saves replace the entire block, not partial deltas.
+## 3. Change institutional identity
 
-## 4. Add a tool
+Edit:
 
-1. Create `agent/tools/my-tool.ts` using Eve's `defineTool`
-2. Register it in Eve's tool discovery (auto-loaded from `agent/tools/` by convention — verify in Eve docs)
-3. Add a UI component in `app/components/chat/tool/` if the tool needs custom rendering
-4. Wire the component in [`app/components/chat/message/MessageContentEve.vue`](../app/components/chat/message/MessageContentEve.vue)
+- `shared/agent.ts` for name, tagline, description, and icon;
+- `app/app.config.ts` for site metadata;
+- `agent/lib/base-instructions.ts` for common institutional behavior;
+- assets under `public/` for visual identity.
 
-See existing tools: [`agent/tools/weather.ts`](../agent/tools/weather.ts), [`agent/tools/save_memory.ts`](../agent/tools/save_memory.ts).
+Do not rename Eve's technical directories, route names, session IDs, continuation tokens, or generated service.
 
-## 5. Add a skill
+## 4. Add capabilities
 
-Skills are markdown files in [`agent/skills/`](../agent/skills/). See [`daily-summary.md`](../agent/skills/daily-summary.md) for an example. Reference skills from home quick actions in [`app/pages/index.vue`](../app/pages/index.vue).
+### Authored Eve tool
 
-## 6. Integrations
+Add a file under `agent/tools/`. Keep institutional transition tools in the existing dynamic process tool surface so authority is role-scoped.
+
+A capability that performs a sensitive write must enforce its own approval/authorization boundary; delegation to the Executor is not itself authorization.
+
+### MCP connection
+
+Add an Eve connection under `agent/connections/`, or mount an extension. Process Skills name required capabilities; the Executor uses only those needed for its work order.
+
+The existing Linear connection is an outbound MCP **client**. The institution's inbound MCP server is the separate `/api/mcp` route.
 
 ### GitHub
 
-Uses Vercel Connect OAuth and [@github-tools/sdk/eve](https://github-tools.com/frameworks/eve). Connector UID: [`shared/connect.ts`](../shared/connect.ts) (`GITHUB_CONNECTOR`), registry: [`server/connectors.ts`](../server/connectors.ts), tools: [`agent/tools/github.ts`](../agent/tools/github.ts).
+The existing GitHub tools remain credential-aware and dynamically available through Vercel Connect.
 
-1. Create a GitHub connector in Vercel Connect:
+## 5. Customize the human workflow
 
-   ```bash
-   vercel connect create github --name personal-agent
-   vercel connect attach github/personal-agent
-   ```
+Human work and review are both represented by explicit assignments. Customize notification copy or add channels in:
 
-2. Update `GITHUB_CONNECTOR` in [`shared/connect.ts`](../shared/connect.ts) if it differs from `vercel connect list`
-3. Open **Settings → Integrations** and connect
-4. Ask about repos, PRs, or issues in chat
-
-### Linear
-
-Uses Vercel Connect MCP (`mcp.linear.app/linear`). Connection logic: [`agent/connections/linear.ts`](../agent/connections/linear.ts).
-
-1. Create a Linear MCP connector in Vercel Connect
-2. Open **Settings → Integrations** and connect
-3. Ask about issues in chat
-
-### Slack
-
-1. Create a Slack connector in Vercel Connect
-2. Replace the slug in [`agent/channels/slack.ts`](../agent/channels/slack.ts):
-
-```typescript
-credentials: connectSlackCredentials("slack/your-slug"),
+```text
+server/utils/process-notifications.ts
 ```
 
-3. Connect in **Settings → Integrations**
-4. Link accounts: generate a code in the app, then DM `link <code>` to the bot
+Keep the web process inbox canonical. External notification delivery must not be able to delete, complete, or silently mutate an assignment.
 
-Slack linking uses the internal API — `INTERNAL_API_SECRET` must be set.
+The human decision UI lives in:
 
-### Sendblue (iMessage)
+```text
+app/components/process/HumanActionPanel.vue
+app/pages/processes/[id].vue
+```
 
-Reach the agent over iMessage via [Sendblue](https://chat-sdk.dev/adapters/vendor-official/sendblue). Channel logic: [`agent/channels/sendblue.ts`](../agent/channels/sendblue.ts).
+## 6. Customize API and MCP exposure
 
-1. Create a Sendblue account and copy API credentials + assigned number from the [dashboard](https://dashboard.sendblue.com) (or `@sendblue/cli`: `sendblue setup`, `sendblue show-keys`, `sendblue lines`)
-2. Set `SENDBLUE_*` env vars on the **eve** service — see [Environment](./ENVIRONMENT.md#sendblue-imessage-optional)
-3. Point the Sendblue receive webhook at `https://<your-domain>/_eve_internal/eve/eve/v1/sendblue/webhook`
-4. Users add their E.164 phone number in **Settings → Profile**, then message the Sendblue number from that phone
+User-scoped tokens are created in Settings → API and stored only as salted hashes.
 
-Phone linking uses the internal API (`GET /api/internal/phone/link`) — `INTERNAL_API_SECRET` must be set.
+- Public process API: `/api/processes`
+- MCP Streamable HTTP endpoint: `/api/mcp`
 
-Tool approvals (`save_memory`) and OAuth prompts are delivered as plain-text iMessage with a link to the web chat — there is no button UI on iMessage.
+The adapters must continue to call the same `submitIntake` service and shared Zod schemas. Do not add an ingress-specific process path.
 
-### Phone number (profile)
+For internet-facing production, also configure platform/WAF rate limiting and request-size limits appropriate to the deployment.
 
-Users add an E.164 number on **Profile**. Required for Sendblue/iMessage auth — the inbound sender number must match the linked profile phone.
+## 7. Slack
 
-## 7. Theme the UI
+Configure the Slack connector identifier in `agent/channels/slack.ts` to match the provisioned Vercel Connect resource. Users link identities in Settings → Integrations.
 
-- Global styles: [`app/assets/css/main.css`](../app/assets/css/main.css)
-- Nuxt UI config: [`app/app.config.ts`](../app/app.config.ts)
-- Layout and navigation: [`app/layouts/default.vue`](../app/layouts/default.vue), [`app/components/Navbar.vue`](../app/components/Navbar.vue)
+Slack inbound messages create an intake before the first model call. Replies in the same Slack thread continue the linked active process.
 
-## 8. Deploy your fork
+## 8. Sendblue / iMessage
 
-See [Deploy on Vercel](../README.md#deploy-on-vercel) in the README. Remember:
+Configure the `SENDBLUE_*` variables documented in [Environment](./ENVIRONMENT.md). The webhook path is:
 
-- Dual services: `web` + `eve` ([`vercel.json`](../vercel.json))
-- Same env vars on both services
-- Run migrations for production database
+```text
+/eve/v1/sendblue/webhook
+```
+
+iMessage associates a linked user's message with their active iMessage process; when none exists, it persists a new intake first. Structured checkpoint decisions are completed in the web process page.
+
+## 9. Change the Metabolism policy
+
+The deterministic candidate scan and command validation live in:
+
+```text
+server/utils/metabolism.ts
+```
+
+The schedule lives in:
+
+```text
+agent/schedules/metabolism.ts
+```
+
+The model may choose only the small `MetabolismAction` union. It must never alter an objective, accept delivery, or replace the type owner's judgment.
+
+## 10. Deploy
+
+On Vercel, keep the `eve/nuxt` module and allow it to generate stable services and routes. Do not restore the obsolete `experimentalServices` layout.
+
+For a split non-Vercel deployment, point Nuxt to the Eve root origin with `EVE_NUXT_PRODUCTION_ORIGIN`, run Eve through its supported build/start path, and confirm the schedule runner is active.

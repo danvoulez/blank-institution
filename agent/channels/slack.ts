@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { connectSlackCredentials } from "@vercel/connect/eve";
 import {
   defaultSlackAuth,
@@ -12,6 +13,7 @@ import {
   fetchSlackLinkForMember,
   parseSlackLinkCommand,
 } from "../lib/slack-internal";
+import { createIntakeRemote } from "../lib/process-internal.js";
 
 async function slackUserProfile(ctx: SlackContext, userId: string) {
   const res = await ctx.slack.request("users.info", { user: userId });
@@ -71,7 +73,8 @@ async function tryHandleSlackLinkCommand(
     return true;
   }
 
-  const reason = result.reason === "expired"
+  const failureReason = "reason" in result ? result.reason : "invalid";
+  const reason = failureReason === "expired"
     ? "That link code has expired. Generate a new one in V → Integrations."
     : "That link code is invalid. Generate a fresh code in V → Integrations.";
 
@@ -115,6 +118,7 @@ async function buildSlackTurn(ctx: SlackContext, message: SlackMessage) {
 
   await ctx.thread.startTyping("Thinking…");
 
+  const text = message.markdown ?? message.text ?? "";
   const context: string[] = [];
   const userId = message.author?.userId;
   let profile: Awaited<ReturnType<typeof slackUserProfile>> = null;
@@ -151,7 +155,7 @@ async function buildSlackTurn(ctx: SlackContext, message: SlackMessage) {
     return null;
   }
 
-  const auth = await resolveSlackInboundAuth(slackAuth, {
+  let auth = await resolveSlackInboundAuth(slackAuth, {
     teamId: message.teamId,
     userId,
     userName: profile?.userName ?? message.author?.userName,
@@ -160,6 +164,30 @@ async function buildSlackTurn(ctx: SlackContext, message: SlackMessage) {
   });
 
   const linked = auth.principalId !== slackAuth.principalId;
+  if (linked) {
+    const raw = message as unknown as Record<string, unknown>;
+    const threadKey = String(raw.threadTs ?? raw.thread_ts ?? raw.ts ?? raw.id ?? text);
+    const idempotencyKey = `slack:${createHash("sha256").update(`${message.teamId}:${userId}:${threadKey}`).digest("hex")}`;
+    const { intake } = await createIntakeRemote({
+      userId: auth.principalId,
+      source: "slack",
+      rawRequest: text,
+      idempotencyKey,
+    });
+    auth = {
+      ...auth,
+      attributes: {
+        ...auth.attributes,
+        role: "translator",
+        userId: auth.principalId,
+        intakeId: intake.id,
+        ...(intake.processId ? { processId: intake.processId } : {}),
+      },
+    };
+    context.push(intake.processId
+      ? `Continue institutional process ${intake.processId} for this Slack thread. Do not submit the same intake again.`
+      : `Institution intake: ${intake.id}. Call submit_for_supervision exactly once for the initial need in this thread.`);
+  }
   if (!linked) {
     const linkUrl = process.env.BETTER_AUTH_URL
       ? `${process.env.BETTER_AUTH_URL.replace(/\/$/, "")}/settings/integrations`

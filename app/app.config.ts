@@ -1,10 +1,10 @@
 export default defineAppConfig({
   site: {
-    name: "V",
-    title: "V",
+    name: "Eve Institution",
+    title: "Eve Institution",
     description:
-      "Your personal AI agent. Chat on the web, Slack, or iMessage — query Linear and pick up where you left off.",
-    tagline: "Vercel × Eve",
+      "A durable process institution powered by Eve: intake, assignment, sandbox execution, checkpoints, and recovery.",
+    tagline: "Institution × Eve",
     author: "Hugo Richard",
     repo: "https://github.com/vercel-labs/personal-agent-template",
     deployUrl:

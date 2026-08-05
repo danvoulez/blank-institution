@@ -78,6 +78,21 @@ defineShortcuts({
               onSelect: () => startNewChat(),
             },
             {
+              label: 'Processes',
+              icon: 'i-lucide-workflow',
+              to: '/processes',
+            },
+            {
+              label: 'Runtime',
+              icon: 'i-lucide-activity',
+              to: '/settings/runtime',
+            },
+            {
+              label: 'Settings',
+              icon: 'i-lucide-settings',
+              to: '/settings/profile',
+            },
+            {
               label: 'Search',
               icon: 'i-lucide-search',
               kbds: ['meta', 'k'],
@@ -120,7 +135,7 @@ defineShortcuts({
 
     <UDashboardSearch
       v-model:open="searchOpen"
-      placeholder="Search chats and actions..."
+      placeholder="Search chats, processes, and actions..."
       :groups="searchGroups"
     />
 

@@ -4,6 +4,9 @@ const route = useRoute();
 const items = [
   { label: "Profile", to: "/settings/profile", icon: "i-lucide-user-round" },
   { label: "Integrations", to: "/settings/integrations", icon: "i-lucide-plug" },
+  { label: "Process types", to: "/settings/process-types", icon: "i-lucide-book-open-check" },
+  { label: "API", to: "/settings/api", icon: "i-lucide-key-round" },
+  { label: "Runtime", to: "/settings/runtime", icon: "i-lucide-activity" },
 ];
 
 function isActive(path: string) {

@@ -1,0 +1,37 @@
+{
+  "id": "triage-review",
+  "version": "1.0.0",
+  "name": "Triage review",
+  "description": "Route an ambiguous or unclassifiable intake through explicit human clarification without losing it.",
+  "ownerPolicy": {
+    "allowed": ["human"],
+    "default": "human"
+  },
+  "responsiblePolicy": {
+    "allowed": ["human"],
+    "default": "human"
+  },
+  "deadlinePolicy": {
+    "allowed": ["urgent", "24h", "1w"],
+    "default": "24h"
+  },
+  "openingCheckpoint": {
+    "required": ["typeOwner", "currentResponsible", "objective", "deadline"]
+  },
+  "stages": [
+    {
+      "id": "clarify",
+      "title": "Clarify and route",
+      "responsible": "human",
+      "requiredCapabilities": [],
+      "instructions": "Clarify the intended deliverable, select the correct Process Skill, and preserve the original intake.",
+      "review": {
+        "reviewer": "typeOwner",
+        "allowedDecisions": ["reassign", "escalate", "complete", "cancel", "fail"]
+      }
+    }
+  ],
+  "completion": {
+    "requiresAcceptedClosureCheckpoint": true
+  }
+}

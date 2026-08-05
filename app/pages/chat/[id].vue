@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ThreadRecord } from "#shared/types/thread";
+import type { ProcessSummary } from "#shared/types/process";
 import { resumeOptionsFromThread } from "~/composables/chat/providers/eve/thread-state";
 import { useChatNavigation, refreshThreadList } from "~/composables/chat/navigation";
 import { useAuthorizationChallenges } from "~/composables/chat/useAuthorizationChallenges";
@@ -28,6 +29,15 @@ if (error.value || !data.value?.thread) {
 }
 
 const thread = computed(() => data.value!.thread);
+const { data: linkedProcess, refresh: refreshLinkedProcess } = await useFetch<{ process?: ProcessSummary }>(
+  () => `/api/threads/${chatId.value}/process`,
+  { server: false },
+);
+let processTimer: number | undefined;
+if (import.meta.client) {
+  processTimer = window.setInterval(() => void refreshLinkedProcess(), 5_000);
+  onBeforeUnmount(() => { if (processTimer !== undefined) window.clearInterval(processTimer); });
+}
 
 const {
   messages,
@@ -72,7 +82,7 @@ function handleSubmit(e: Event) {
   const text = input.value.trim();
   if (!text || isBusy.value) return;
   input.value = "";
-  void sendMessage(text);
+  void sendMessage(text, { processId: linkedProcess.value?.process?.id });
 }
 
 function handleInputResponses(responses: Parameters<typeof sendInputResponses>[0]) {
@@ -109,13 +119,14 @@ function handleInputResponses(responses: Parameters<typeof sendInputResponses>[0
         class="flex flex-1"
       >
         <UContainer class="flex flex-1 flex-col gap-4 sm:gap-6">
+          <ProcessCard v-if="linkedProcess?.process" :process="linkedProcess.process" class="mt-(--ui-header-height)" />
           <UChatMessages
             should-auto-scroll
             :messages="messages"
             :status="status"
             :spacing-offset="160"
             :assistant="{ side: 'left', variant: 'naked', ui: { container: 'relative flex w-full min-w-0 items-start' } }"
-            class="pt-(--ui-header-height) pb-4 sm:pb-6"
+            :class="linkedProcess?.process ? 'pb-4 sm:pb-6' : 'pt-(--ui-header-height) pb-4 sm:pb-6'"
           >
             <template #indicator>
               <ChatActivityIndicator />

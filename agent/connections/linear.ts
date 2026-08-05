@@ -9,7 +9,7 @@ const connectAuth = connect({
   validate: true,
   principalToSubject: (principal) => ({
     type: "user",
-    id: principal.id,
+    id: typeof principal.attributes?.userId === "string" ? principal.attributes.userId : principal.id,
     issuer: principal.issuer ?? principal.authenticator ?? USER_ISSUER,
   }),
 });

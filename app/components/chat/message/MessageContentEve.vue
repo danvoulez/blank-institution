@@ -14,7 +14,6 @@ import type { ChatStatus } from "~/composables/chat/types";
 import { getMergedParts } from "~/utils/chat/ai";
 import { hasVisibleParts, getToolDisplayName, normalizeEveParts, shouldShowToolInput } from "~/utils/chat/eve";
 import { buildDisplayParts } from "~/utils/chat/save-memory";
-import type { WeatherUIToolInvocation } from "~~/shared/utils/tools/weather";
 
 const props = defineProps<{
   message: UIMessage;
@@ -73,13 +72,8 @@ const showThinking = computed(
       </UChatReasoning>
 
       <template v-else-if="isToolUIPart(entry.part) || isDynamicToolUIPart(entry.part)">
-        <ChatToolWeather
-          v-if="getToolName(entry.part) === 'weather'"
-          :invocation="{ ...(entry.part as WeatherUIToolInvocation) }"
-          :streaming="isToolStreaming(entry.part)"
-        />
         <UChatTool
-          v-else-if="getToolName(entry.part) === 'web_search' || getToolName(entry.part) === 'google_search'"
+          v-if="getToolName(entry.part) === 'web_search' || getToolName(entry.part) === 'google_search'"
           :text="isToolStreaming(entry.part) ? 'Searching the web...' : 'Searched the web'"
           :suffix="getSearchQuery(entry.part)"
           :streaming="isToolStreaming(entry.part)"
