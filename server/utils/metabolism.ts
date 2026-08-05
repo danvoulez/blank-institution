@@ -6,11 +6,17 @@ import { assignmentRow, intakeRow, processRow } from "./process-codec";
 import { getProcessDetailForUser } from "./processes";
 import { failIntake, prepareIntakeRetry } from "./process-intake";
 import { notifyHumanAssignment, notifyIntakeFailure } from "./process-notifications";
+import { openRecoveryCheckpoint } from "./process-recovery";
 
 const TERMINAL = ["completed", "cancelled", "failed"] as const;
 
 function intakeMaxAttempts() {
   const value = Number(process.env.INTAKE_ANALYSIS_MAX_ATTEMPTS ?? 3);
+  return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 3;
+}
+
+function assignmentMaxAttempts() {
+  const value = Number(process.env.ASSIGNMENT_MAX_ATTEMPTS ?? 3);
   return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 3;
 }
 
@@ -112,6 +118,22 @@ async function retryAssignment(assignmentId: string) {
   if (!process || TERMINAL.includes(process.status as (typeof TERMINAL)[number])) return { ignored: true };
   const [checkpoint] = await db.select().from(schema.processCheckpoints).where(eq(schema.processCheckpoints.id, assignment.checkpointId)).limit(1);
   if (!checkpoint?.workOrder) return { ignored: true, reason: "missing work order" };
+
+  // Reissuing is not free: every attempt at an LLM assignee starts a new role
+  // session. Past the budget the institution stops guessing and hands the type
+  // owner a decision, the same way an exhausted intake escalates to a human.
+  if (assignment.attempt >= assignmentMaxAttempts()) {
+    const reason = `Assignment ${assignment.id} failed or timed out after ${assignment.attempt} attempt(s).`;
+    const recovery = await openRecoveryCheckpoint({
+      assignmentId: assignment.id,
+      reason,
+      correction: "Decide whether to retry with a corrected work order, reassign, cancel, or fail.",
+      payload: { exhaustedAssignmentId: assignment.id, attempts: assignment.attempt },
+    });
+    if (!recovery) return { ignored: true, reason: "recovery is already pending or the process is closed" };
+    await executeNextAction(recovery.nextAction);
+    return { escalated: true, assignmentId: assignment.id, attempts: assignment.attempt, reason };
+  }
 
   const newId = crypto.randomUUID();
   await db.transaction(async (tx) => {

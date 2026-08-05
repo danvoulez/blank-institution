@@ -64,6 +64,7 @@ When a role has no base URL, Eve selects its serializable Gateway model at `sess
 | `METABOLISM_SCHEDULE` | `*/5 * * * *` | Eve schedule cadence, in UTC on Vercel. |
 | `SLA_URGENT_HOURS` | empty | Institution-wide urgent duration. Without it, opening must provide an explicit `dueAt`. |
 | `INTAKE_ANALYSIS_MAX_ATTEMPTS` | `3` | Automatic Translator analysis attempts before explicit failure and human escalation. |
+| `ASSIGNMENT_MAX_ATTEMPTS` | `3` | Automatic assignment reissues before the type owner gets a recovery checkpoint. |
 | `ASSIGNMENT_ACCEPT_MINUTES` | `10` | Time allowed to claim a newly issued assignment. |
 | `ASSIGNMENT_LEASE_MINUTES` | `30` | Default renewable assignment lease. |
 | `INSTITUTION_ADMIN_USER_IDS` | empty | Comma-separated Better Auth user IDs allowed to change global role routing. In production, an empty value makes Runtime settings read-only. |

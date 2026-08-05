@@ -48,18 +48,36 @@ export async function launchRoleSession(input: {
 }) {
   const client = createInstitutionEveClient(input);
   const session = client.session();
-  const response = await session.send({
-    message: input.message,
-    clientContext: {
-      institution: {
-        role: input.role,
-        userId: input.userId,
-        intakeId: input.intakeId,
-        processId: input.processId,
-        assignmentId: input.assignmentId,
+  // send() resolves once the turn is accepted, not once it finishes, so a
+  // failure inside the turn surfaces later through the runtime hook. A failure
+  // *here* means the session never started: no session id was assigned, so no
+  // hook can correlate it back to this assignment, and only the accept deadline
+  // would notice. Log it with the coordinates that make it diagnosable.
+  let response;
+  try {
+    response = await session.send({
+      message: input.message,
+      clientContext: {
+        institution: {
+          role: input.role,
+          userId: input.userId,
+          intakeId: input.intakeId,
+          processId: input.processId,
+          assignmentId: input.assignmentId,
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    console.error("institution role session failed to start", {
+      role: input.role,
+      userId: input.userId,
+      intakeId: input.intakeId,
+      processId: input.processId,
+      assignmentId: input.assignmentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
   await linkRoleSession({
     role: input.role,
     intakeId: input.intakeId,

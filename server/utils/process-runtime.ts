@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@nuxthub/db";
-import type { ActorRef, NextAction, RuntimeFact, WorkOrder } from "#shared/types/process";
+import type { NextAction, RuntimeFact } from "#shared/types/process";
 import { canonicalJson } from "#shared/canonical";
 import { effectKeyInput } from "#shared/effect-key";
 import { executeNextAction } from "./eve-control-plane";
+import { openRecoveryCheckpoint } from "./process-recovery";
 
 function effectKey(fact: RuntimeFact) {
   return createHash("sha256").update(canonicalJson(effectKeyInput(fact)), "utf8").digest("hex");
@@ -51,96 +52,17 @@ async function persistContinuation(sessionId: string, token: string) {
 }
 
 async function markSessionFailure(fact: RuntimeFact): Promise<{ processId: string; nextAction: NextAction } | undefined> {
-  const [assignment] = await db.select().from(schema.processAssignments).where(and(
+  const [assignment] = await db.select({ id: schema.processAssignments.id }).from(schema.processAssignments).where(and(
     eq(schema.processAssignments.childSessionId, fact.sessionId),
     inArray(schema.processAssignments.status, ["attempting", "accepted", "running"]),
   )).limit(1);
   if (!assignment) return undefined;
 
-  const recovery = await db.transaction(async (tx) => {
-    const [process] = await tx.select().from(schema.processes).where(eq(schema.processes.id, assignment.processId)).limit(1);
-    if (!process || ["completed", "cancelled", "failed"].includes(process.status)) return undefined;
-    const [sourceCheckpoint] = await tx.select().from(schema.processCheckpoints).where(
-      eq(schema.processCheckpoints.id, assignment.checkpointId),
-    ).limit(1);
-
-    await tx.update(schema.processAssignments).set({
-      status: "failed",
-      leaseExpiresAt: null,
-      sandboxId: null,
-      feedback: `Runtime ${fact.eventType}: ${JSON.stringify(fact.data ?? {})}`,
-    }).where(and(
-      eq(schema.processAssignments.id, assignment.id),
-      inArray(schema.processAssignments.status, ["attempting", "accepted", "running"]),
-    ));
-
-    const sequence = process.currentCheckpointSeq + 1;
-    const checkpointId = crypto.randomUUID();
-    const reviewAssignmentId = crypto.randomUUID();
-    const owner = process.typeOwner as ActorRef;
-    await tx.insert(schema.processCheckpoints).values({
-      id: checkpointId,
-      processId: process.id,
-      sequence,
-      kind: "recovery",
-      status: "pending",
-      reviewer: owner,
-      receivedFrom: assignment.assignee,
-      decision: null,
-      nextResponsible: owner,
-      workOrder: (sourceCheckpoint?.workOrder as WorkOrder | null) ?? undefined,
-      payload: {
-        failedAssignmentId: assignment.id,
-        failedAssignmentPurpose: assignment.purpose,
-        runtimeFact: fact,
-      },
-      review: {
-        accepted: false,
-        findings: [`Runtime failure in session ${fact.sessionId}`],
-        requestedCorrections: ["Decide whether to retry, reassign, cancel, or fail the process."],
-      },
-      result: fact.data,
-      expectedRevision: process.revision,
-      sourceEventId: fact.eventId,
-    });
-    await tx.insert(schema.processAssignments).values({
-      id: reviewAssignmentId,
-      processId: process.id,
-      checkpointId,
-      purpose: "checkpoint_review",
-      assignee: owner,
-      status: "attempting",
-      attempt: 1,
-      acceptDeadlineAt: new Date(Date.now() + Number(process.env.ASSIGNMENT_ACCEPT_MINUTES ?? 10) * 60_000),
-    });
-    await tx.update(schema.processes).set({
-      status: "blocked",
-      currentCheckpointSeq: sequence,
-      revision: process.revision + 1,
-      updatedAt: new Date(),
-    }).where(and(eq(schema.processes.id, process.id), eq(schema.processes.revision, process.revision)));
-    return { processId: process.id, userId: process.userId, owner, reviewAssignmentId };
+  return openRecoveryCheckpoint({
+    assignmentId: assignment.id,
+    reason: `Runtime ${fact.eventType} in session ${fact.sessionId}: ${JSON.stringify(fact.data ?? {})}`,
+    correction: "Decide whether to retry, reassign, cancel, or fail the process.",
+    sourceEventId: fact.eventId,
+    payload: { runtimeFact: fact },
   });
-
-  if (!recovery) return undefined;
-  const nextAction: NextAction = recovery.owner.kind === "human"
-    ? {
-        kind: "request_human",
-        processId: recovery.processId,
-        assignmentId: recovery.reviewAssignmentId,
-        userId: recovery.owner.id,
-        prompt: "A runtime failure created a recovery checkpoint. Accept it and decide whether to retry, reassign, cancel, or fail.",
-      }
-    : {
-        kind: "launch_role",
-        role: "supervisor",
-        userId: recovery.userId,
-        processId: recovery.processId,
-        assignmentId: recovery.reviewAssignmentId,
-        message: [
-          `Accept recovery checkpoint assignment ${recovery.reviewAssignmentId} for process ${recovery.processId}.`,
-          "Inspect the failed assignment and dossier, then call recover_process with an explicit decision.",
-        ].join("\n\n"),
-      };
-  return { processId: recovery.processId, nextAction };
 }
