@@ -30,7 +30,7 @@
     "typecheck": "nuxt typecheck",
     "db:generate": "nuxt db generate",
     "db:migrate": "nuxt db migrate",
-    "test:process": "node --experimental-strip-types --test server/utils/process-machine.test.ts"
+    "test:process": "node --experimental-strip-types --test \"server/utils/*.test.ts\" \"shared/*.test.ts\""
   },
   "dependencies": {
     "@comark/nuxt": "^0.5.0",
