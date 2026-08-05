@@ -93,6 +93,17 @@ export async function launchRoleSession(input: {
   };
 }
 
+// The Metabolism role owns no intake, process or assignment, so unlike the
+// other roles there is nothing to link the session back to.
+export async function launchMetabolismSession(message: string) {
+  const client = createInstitutionEveClient({ role: "metabolism", userId: "system" });
+  const response = await client.session().send({
+    message,
+    clientContext: { institution: { role: "metabolism", userId: "system" } },
+  });
+  return { sessionId: response.sessionId, continuationToken: response.continuationToken };
+}
+
 export async function executeNextAction(action: NextAction) {
   switch (action.kind) {
     case "launch_role":

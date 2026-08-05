@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Metabolism tick, every five minutes.
+
+  Install on the host that runs the institution:
+
+    cp scripts/work.minilab.institution.metabolism.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/work.minilab.institution.metabolism.plist
+    launchctl kickstart -p gui/$(id -u)/work.minilab.institution.metabolism
+
+  Edit the two paths below first: the repository checkout and the env file
+  holding INTERNAL_API_SECRET. Keep that env file readable only by its owner —
+  the secret in it is the whole of the institution's internal authority.
+
+  launchd, not cron: it survives reboot, it will not start a second run while
+  one is still going, and it logs somewhere findable.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>work.minilab.institution.metabolism</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>/Users/danvoulez/institution/scripts/metabolism-tick.sh</string>
+    <string>/Users/danvoulez/institution/.env</string>
+  </array>
+
+  <key>StartInterval</key>
+  <integer>300</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/danvoulez/institution/.data/metabolism-tick.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/danvoulez/institution/.data/metabolism-tick.err</string>
+</dict>
+</plist>

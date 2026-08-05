@@ -13,3 +13,4 @@ export * from "./schema/process-api-tokens";
 export * from "./schema/process-runtime-receipts";
 
 export * from "./schema/process-role-models";
+export * from "./schema/institution-leases";

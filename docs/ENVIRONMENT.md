@@ -49,11 +49,11 @@ Each role can use an AI Gateway model ID or an OpenAI-compatible endpoint. Setti
 | `EXECUTOR_MODEL` | `qwen3-coder` | Large local execution model ID. |
 | `EXECUTOR_BASE_URL` | empty | OpenAI-compatible local inference origin, normally ending in `/v1`. |
 | `EXECUTOR_API_KEY` | empty | Local provider token; use the value required by the inference server. |
-| `EXECUTOR_CONTEXT_WINDOW_TOKENS` | `131072` | Explicit context-window override. |
+| `EXECUTOR_CONTEXT_WINDOW_TOKENS` | empty | Usable window for this role, as the endpoint reports it. |
 | `METABOLISM_MODEL` | `qwen3-8b` | Small local liveness model ID. |
 | `METABOLISM_BASE_URL` | empty | OpenAI-compatible local inference origin. |
 | `METABOLISM_API_KEY` | empty | Local provider token. |
-| `METABOLISM_CONTEXT_WINDOW_TOKENS` | `32768` | Explicit context-window override. |
+| `METABOLISM_CONTEXT_WINDOW_TOKENS` | `2048` | Usable window for this role. Set it to what the endpoint reports, not the model's nominal context: llama.cpp divides `--ctx-size` across `--parallel` slots. |
 
 When a role has no base URL, Eve selects its serializable Gateway model at `session.started`. With a base URL, Eve creates the direct AI SDK model at `step.started`, which is the lifecycle that permits live model objects.
 
@@ -61,10 +61,14 @@ When a role has no base URL, Eve selects its serializable Gateway model at `sess
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `METABOLISM_SCHEDULE` | `*/5 * * * *` | Eve schedule cadence, in UTC on Vercel. |
 | `SLA_URGENT_HOURS` | empty | Institution-wide urgent duration. Without it, opening must provide an explicit `dueAt`. |
 | `INTERNAL_ORIGIN` | `http://127.0.0.1:$PORT` | Where the institution reaches itself. Keep it on loopback: `BETTER_AUTH_URL` is the public name and must not be reused here. |
 | `INTAKE_ANALYSIS_MAX_ATTEMPTS` | `3` | Automatic Translator analysis attempts before explicit failure and human escalation. |
+| `METABOLISM_SCHEDULE` | `*/5 * * * *` | Declared cadence. Declarative only: `eve/nuxt` does not compile schedules into the Nitro build, so an external timer drives the tick. |
+| `METABOLISM_LEASE_SECONDS` | `300` | How long one tick holds the liveness lease before another may take it. |
+| `METABOLISM_RESERVE_OUTPUT_TOKENS` | `512` | Held back from the window for the model's reply. |
+| `METABOLISM_PROMPT_OVERHEAD_TOKENS` | `320` | Tokens the surrounding instructions cost, excluded from the record budget. |
+| `METABOLISM_MAX_DIGEST_RECORDS` | `25` | Hard cap on processes per tick, regardless of what would fit. |
 | `ASSIGNMENT_MAX_ATTEMPTS` | `3` | Automatic assignment reissues before the type owner gets a recovery checkpoint. |
 | `ASSIGNMENT_ACCEPT_MINUTES` | `10` | Time allowed to claim a newly issued assignment. |
 | `ASSIGNMENT_LEASE_MINUTES` | `30` | Default renewable assignment lease. |
