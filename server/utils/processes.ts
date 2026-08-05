@@ -7,6 +7,7 @@ import type {
   ProcessRecord,
   ProcessRecoveryDecision,
   ProcessSummary,
+  ProcessTypeManifest,
   SupervisorOpeningDecision,
   SupervisorReviewDecision,
   WorkOrder,
@@ -79,6 +80,36 @@ function assignmentAction(input: {
       "Required protocol: accept the assignment, perform the work using Eve's built-in sandbox/file tools, store relevant artifacts, then submit_work.",
     ].join("\n\n"),
   };
+}
+
+// Names the stage on a work order as it enters the dossier, so the review that
+// follows reads the stage from the record rather than inferring it.
+function withStage(manifest: ProcessTypeManifest, workOrder: WorkOrder): WorkOrder {
+  if (workOrder.stageId || manifest.stages.length !== 1) return workOrder;
+  return { ...workOrder, stageId: manifest.stages[0]!.id };
+}
+
+// Which stage's review policy governs this checkpoint. The union of every
+// stage's allowedDecisions let a decision permitted only in a later stage be
+// applied in an earlier one — inert while every installed skill has a single
+// stage, wrong the moment one does not.
+function resolveStage(manifest: ProcessTypeManifest, stageId: string | undefined) {
+  if (stageId) {
+    const stage = manifest.stages.find(item => item.id === stageId);
+    if (!stage) {
+      throw createError({ statusCode: 422, statusMessage: `Stage ${stageId} is not part of ${manifest.id}` });
+    }
+    return stage;
+  }
+
+  const [only] = manifest.stages;
+  if (!only || manifest.stages.length > 1) {
+    throw createError({
+      statusCode: 422,
+      statusMessage: `${manifest.id} has multiple stages, so its work order must name a stageId`,
+    });
+  }
+  return only;
 }
 
 async function activeAssignmentForProcess(processId: string) {
@@ -240,7 +271,7 @@ export async function openProcessFromSupervisor(
       reviewer: typeOwner,
       decision: humanOpeningReview ? null : "assign",
       nextResponsible: currentResponsible,
-      workOrder: input.workOrder,
+      workOrder: withStage(manifest, input.workOrder),
       payload: { rationale: input.rationale },
       expectedRevision: 0,
     });
@@ -826,9 +857,15 @@ export async function applyReviewDecision(input: {
     }
 
     const manifest = getProcessType(process.skillId, process.skillVersion);
-    const allowed = new Set(manifest.stages.flatMap(stage => stage.review.allowedDecisions));
-    if (!allowed.has(input.decision.decision)) {
-      throw createError({ statusCode: 422, statusMessage: `Decision ${input.decision.decision} is not allowed by ${manifest.id}` });
+    const [workCheckpoint] = await tx.select().from(schema.processCheckpoints).where(
+      eq(schema.processCheckpoints.id, assignment.checkpointId),
+    ).limit(1);
+    const stage = resolveStage(manifest, (workCheckpoint?.workOrder as WorkOrder | null)?.stageId);
+    if (!stage.review.allowedDecisions.includes(input.decision.decision)) {
+      throw createError({
+        statusCode: 422,
+        statusMessage: `Decision ${input.decision.decision} is not allowed by stage ${stage.id} of ${manifest.id}`,
+      });
     }
 
     const checkpointId = crypto.randomUUID();

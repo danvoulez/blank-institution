@@ -83,6 +83,22 @@ test("all installed Process Skills require the mandatory opening checkpoint", ()
   }
 });
 
+test("a stage's review policy is narrower than the union across stages", () => {
+  // Reviews resolve the stage from the work order rather than unioning every
+  // stage's allowedDecisions. These two manifests show why: triage-review
+  // deliberately withholds accept and return, and the union hands them back.
+  const union = new Set(PROCESS_TYPE_MANIFESTS.flatMap(m => m.stages.flatMap(s => s.review.allowedDecisions)));
+  const triage = PROCESS_TYPE_MANIFESTS.find(item => item.id === "triage-review");
+  if (!triage) throw new Error("triage-review manifest is missing");
+
+  for (const stage of triage.stages) {
+    assert.equal(stage.review.allowedDecisions.includes("accept"), false);
+    assert.equal(stage.review.allowedDecisions.includes("return"), false);
+  }
+  assert.equal(union.has("accept"), true);
+  assert.equal(union.has("return"), true);
+});
+
 test("generic delivery supports correction and closure", () => {
   const generic = PROCESS_TYPE_MANIFESTS.find(item => item.id === "generic-delivery");
   if (!generic) throw new Error("generic-delivery manifest is missing");

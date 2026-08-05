@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, inArray, lt, or } from "drizzle-orm";
 import { db, schema } from "@nuxthub/db";
-import type { ActorRef, MetabolismAction } from "#shared/types/process";
+import type { ActorRef, DeadlineClass, MetabolismAction } from "#shared/types/process";
 import { createInstitutionEveClient, executeNextAction, launchTranslatorForIntake } from "./eve-control-plane";
 import { assignmentRow, intakeRow, processRow } from "./process-codec";
+import { deadlineWarningAt } from "./process-deadlines";
 import { getProcessDetailForUser } from "./processes";
 import { failIntake, prepareIntakeRetry } from "./process-intake";
 import { notifyHumanAssignment, notifyIntakeFailure } from "./process-notifications";
@@ -21,9 +22,11 @@ function assignmentMaxAttempts() {
   return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 3;
 }
 
-function deadlineWarningAt(process: { createdAt: Date; dueAt: Date; deadlineClass: string }) {
-  const fraction = process.deadlineClass === "urgent" ? 0.5 : process.deadlineClass === "24h" ? 0.75 : 0.8;
-  return process.createdAt.getTime() + Math.max(0, process.dueAt.getTime() - process.createdAt.getTime()) * fraction;
+function warningAt(row: { createdAt: Date; dueAt: Date; deadlineClass: string }) {
+  return deadlineWarningAt(
+    { class: row.deadlineClass as DeadlineClass, dueAt: row.dueAt.getTime() },
+    row.createdAt.getTime(),
+  );
 }
 
 export async function scanMetabolism(now = Date.now()) {
@@ -49,7 +52,7 @@ export async function scanMetabolism(now = Date.now()) {
   const activeProcessIds = new Set(activeAssignments.map(item => item.processId));
   const processes = activeProcesses.filter((process) => {
     const orphaned = process.updatedAt.getTime() <= staleProcessBefore && !activeProcessIds.has(process.id);
-    return process.status === "blocked" || now >= deadlineWarningAt(process) || orphaned;
+    return process.status === "blocked" || now >= warningAt(process) || orphaned;
   });
 
   return {
@@ -83,7 +86,7 @@ export async function applyMetabolismAction(action: MetabolismAction) {
       if (!row || TERMINAL.includes(row.status as (typeof TERMINAL)[number])) return { ignored: true };
       const now = Date.now();
       const stale = row.updatedAt.getTime() < now - 10 * 60_000;
-      const deadlineWarning = now >= deadlineWarningAt(row);
+      const deadlineWarning = now >= warningAt(row);
       if (action.kind === "resume_process" && row.status !== "blocked" && !stale) return { ignored: true, reason: "process is not blocked or stale" };
       if (action.kind === "escalate" && row.status !== "blocked" && !deadlineWarning) return { ignored: true, reason: "process is neither blocked nor at its deadline warning threshold" };
       if (deadlineWarning) await recordDeadlineCheckpoint(row.id, action.reason);

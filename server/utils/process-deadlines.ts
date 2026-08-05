@@ -31,7 +31,10 @@ export function resolveDeadline(
   return { class: input.class, dueAt: now + DURATIONS_MS[input.class] };
 }
 
+// The point in a process's own span at which its deadline stops being a fact
+// and becomes a risk worth escalating. Tighter classes warn earlier in
+// proportion, because there is less room left to recover.
 export function deadlineWarningAt(deadline: ProcessDeadline, createdAt: number): number {
   const ratio = deadline.class === "urgent" ? 0.5 : deadline.class === "24h" ? 0.75 : 0.8;
-  return createdAt + Math.max(1, deadline.dueAt - createdAt) * ratio;
+  return createdAt + Math.max(0, deadline.dueAt - createdAt) * ratio;
 }
