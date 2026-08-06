@@ -1,6 +1,6 @@
 ---
-name: Generic delivery
-summary: Deliver a concrete artifact through assignment, execution, review, correction, and closure.
+description: >-
+  Use when a request has a concrete final deliverable and no more specific Process Skill applies. Covers assignment, execution, review against acceptance criteria, correction, and closure.
 ---
 
 # Generic delivery process

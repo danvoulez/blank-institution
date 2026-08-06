@@ -1,6 +1,6 @@
 ---
-name: Triage review
-summary: Preserve and clarify an intake that cannot safely be classified automatically.
+description: >-
+  Use when the intended outcome, the authority, the responsible party, or the applicable Process Skill cannot be determined with confidence and the intake must be clarified without being lost.
 ---
 
 # Triage review
