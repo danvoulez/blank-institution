@@ -1,0 +1,55 @@
+area,arquivo,linhas,papel_atual,veredito,motivo,risco_se_errar
+SKILL,agent/skills/generic-delivery/SKILL.md,41,procedimento em markdown + frontmatter Agent Skill,ABSORVER,corpo vira README.md (humano); prompts vão para o manifesto,perder a prosa que documenta o processo para pessoas
+SKILL,agent/skills/triage-review/SKILL.md,10,idem,ABSORVER,idem,idem
+SKILL,agent/skills/*/process.json,,política: owner/responsible/deadline/stages/completion,ALTERAR+MOVER,"cresce (topologia, formulário, prompts, transições) e sai de agent/skills/ porque não é Agent Skill",o Eve derruba o compile em qualquer entrada malformada nessa pasta
+SKILL,scripts/generate-process-types.mjs,45,"lê 1 process.json por pasta, valida 10 chaves",ALTERAR,passa a percorrer a pasta inteira e ler frontmatter por arquivo,é o único ponto que valida identidade tripla (pasta/id/name)
+SKILL,shared/generated/process-types.ts,125,const gerado,MANTER,regenerado; nunca editado à mão,-
+SKILL,server/utils/process-types.ts,47,2 lookups + 3 validadores,ALTERAR,"valida também formulário, vagas e transições",é onde a política vira imposição
+SKILL,app/pages/settings/process-types.vue,48,exibe manifesto,ALTERAR,exibe os campos novos,cosmético
+DOMÍNIO,shared/types/process.ts,303,"espinha de tipos (ProcessRecord, Checkpoint, Assignment, Manifest)",ALTERAR,tipo do manifesto cresce; tipo da instância vira o arquivo,typecheck enumera todo consumidor quebrado — é o guia da transição
+DOMÍNIO,shared/schemas/process.ts,181,validação zod de entrada,ALTERAR,intake passa de rawRequest livre para formulário do tipo,porta de entrada; errar aqui rejeita trabalho legítimo
+DOMÍNIO,shared/process-machine.ts,65,transições de status + terminalidade,MANTER,"status do processo é controle, ortogonal a stage",é o invariante que impede ressuscitar processo fechado
+DOMÍNIO,server/utils/processes.ts,1006,"TUDO: consultas, abertura, claim, submit, review, recovery, prompts",PARTIR,"1006 linhas misturando controle, registro e composição de prompt",o arquivo mais perigoso da transição; concentra 6 dos 17 pontos de prompt
+DOMÍNIO,server/utils/process-codec.ts,112,linha do banco -> domínio,SUBSTITUIR,"se a instância é arquivo, vira arquivo -> domínio",-
+DOMÍNIO,server/utils/process-intake.ts,128,"cria intake, idempotência, retry",ALTERAR,chave de idempotência vira identidade da ocorrência (recorrência),é o que garante que nada duplica nem se perde
+DOMÍNIO,server/utils/process-deadlines.ts,48,classes de prazo e janela de alerta,MANTER,-,-
+DOMÍNIO,server/utils/process-status.ts,14,guarda de transição,MANTER,-,-
+DOMÍNIO,server/utils/process-recovery.ts,131,checkpoint de recuperação,MANTER,controle puro,escalação quando papéis não convergem
+DOMÍNIO,server/utils/process-artifacts.ts,84,artefatos + digest + índice único,ALTERAR,decidir se artefato é entrada no arquivo ou continua fora,-
+DOMÍNIO,server/utils/metabolism.ts,291,scan + ações determinísticas,MANTER,liveness é controle,4 dos 17 pontos de prompt estão aqui
+DOMÍNIO,server/utils/metabolism-tick.ts,137,tick idempotente com lease,MANTER,recém-feito,-
+DOMÍNIO,server/utils/institution-leases.ts,56,lease nomeado,MANTER,recém-feito,-
+DOMÍNIO,server/utils/process-api-tokens.ts,74,tokens de API,MANTER,ortogonal,-
+DOMÍNIO,server/utils/process-auth.ts,11,auth de processo,MANTER,ortogonal,-
+TABELA,server/db/schema/processes.ts,32,estado do processo,REDUZIR,"vira índice sobre os arquivos (busca, listagem, prazo)","se virar segunda fonte de verdade, discorda do arquivo"
+TABELA,server/db/schema/process-checkpoints.ts,26,decisões,ABSORVER,decisões viram entradas append-only no arquivo,é o registro de autoridade; perder ordem é perder a trilha
+TABELA,server/db/schema/process-assignments.ts,37,atribuições + lease + tentativas,REDUZIR,controle fica; conteúdo vai para o arquivo,índice único de assignment ativo deixa de ser necessário (1 arquivo = 1 contenção)
+TABELA,server/db/schema/process-intakes.ts,27,entrada + idempotência,MANTER,porta de entrada e dedupe,-
+TABELA,server/db/schema/process-artifacts.ts,21,artefatos + digest,REVER,depende da decisão sobre artefato,-
+TABELA,server/db/schema/process-runtime-receipts.ts,14,razão de efeitos (dedupe de hook),MANTER,ortogonal ao processo; é do runtime,hoje é write-only: ninguém lê o payload
+TABELA,server/db/schema/process-role-models.ts,12,modelo por papel (1 linha mutável),SUBSTITUIR,preferência vai para o manifesto por tipo; sem histórico hoje,sem isso não há como atribuir desempenho a modelo
+TABELA,server/db/schema/institution-leases.ts,13,lease,MANTER,-,-
+PONTE,agent/tools/process.ts,221,tools resolvidas por papel (translator/supervisor/executor/metabolism),ALTERAR,é AQUI que nasce a interface do binário: perguntas por papel,já faz autoridade disjunta estruturalmente — a peça mais valiosa a preservar
+PONTE,agent/lib/process-internal.ts,189,cliente HTTP das 11 rotas internas,ALTERAR,acompanha a interface nova,-
+PONTE,agent/lib/role-context.ts,34,papel a partir do auth,MANTER,-,é o que impede escalar papel pelo header
+PONTE,agent/channels/eve.ts,62,auth por sessão de app vs serviço,MANTER,fixa role=translator para browser,vetor de escalação se mexer errado
+PONTE,agent/agent.ts,66,modelo dinâmico por papel,MANTER,-,-
+PONTE,agent/lib/model-config.ts,39,resolve modelo por papel,ALTERAR,passa a consultar catálogo/manifesto,-
+PONTE,agent/hooks/process-observer.ts,37,projeta todo evento,MANTER,-,um POST por evento; sem retenção
+PONTE,agent/schedules/metabolism.ts,26,chama o tick,MANTER,-,-
+PROMPT,agent/lib/base-instructions.ts,79,persona + regras gerais,ALTERAR,persona fica; procedimento de processo sai para o manifesto,-
+PROMPT,agent/instructions.ts,35,injeta memória no session.started,MANTER,-,-
+PROMPT,server/utils/processes.ts (6 pontos),1006,monta mensagem de executor/supervisor e prompt humano,ABSORVER,declarado por stage no manifesto,prompt em código = mudar processo exige deploy
+PROMPT,server/utils/metabolism.ts (4 pontos),291,mensagens de reemissão e escalação,ABSORVER,idem,-
+PROMPT,server/utils/process-notifications.ts (3 pontos),111,texto para humano em Slack/iMessage,ALTERAR,"fica, mas usa origem pública e template do tipo",links quebrados se virar loopback
+PROMPT,server/utils/eve-control-plane.ts (2 pontos),157,mensagem do Translator,ABSORVER,idem,-
+PROMPT,server/utils/process-recovery.ts (1 ponto),131,prompt de recuperação,ABSORVER,idem,-
+PROMPT,server/utils/metabolism-tick.ts (1 ponto),137,mensagem interpretativa com orçamento,MANTER,"já é composição, não extração",-
+RECIBO,shared/canonical.ts,56,JCS RFC 8785,MANTER,base do encadeamento de hash do arquivo,confere com os 9 vectors do conformance
+RECIBO,shared/effect-key.ts,34,chave de efeito por escopo,MANTER,-,-
+RECIBO,server/utils/process-runtime.ts,68,ingestão de fato de runtime,MANTER,-,-
+RECIBO,shared/metabolism-digest.ts,106,projeção com orçamento de tokens,MANTER,é o padrão a generalizar para a interface por papel,-
+NOVO,(a criar) formato do arquivo-processo,,-,NOVO,"JSON append-only, encadeado, meio preenchido pelo molde",é o coração; errar o esquema é caro porque append-only não reescreve
+NOVO,(a criar) interface de perguntas por papel,,-,NOVO,substitui get_process_context que hoje devolve o dossiê inteiro,VAZAMENTO ATUAL: Executor recebe rationale do Supervisor e findings anteriores
+NOVO,(a criar) compositor único de prompt,,-,NOVO,um lugar em vez de 17,-
+NOVO,(a criar) motor de transição entre stages,,-,NOVO,stages declaradas hoje; nada avança entre elas,multi-stage nunca existiu
